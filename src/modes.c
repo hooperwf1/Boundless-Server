@@ -65,6 +65,9 @@ int mode_isValidMode(char mode, int type){
 }
 
 char *mode_setKey(struct clus_Cluster *c, char *key){
+	if(c == NULL)
+		return ERR_UNKNOWNERROR;
+
 	if(key == NULL)
 		return ERR_NEEDMOREPARAMS;
 

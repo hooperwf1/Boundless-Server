@@ -262,6 +262,9 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 
 			cluster = chan_createChannel(data[1], g, user);
 		}
+
+		// Add a key if specified
+		mode_setKey(cluster, cmd->params[1]);
 	}
 
 	// Cluster still unavaliable: FULL
@@ -293,7 +296,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
 	// Success
-	chat_createMessage(reply, user, thisServer, "JOIN", params, 1);
+	chat_createMessage(reply, user, nick, "JOIN", params, 1);
 	clus_sendClusterMessage(reply, cluster);
 
 	// Generate a NAMES command
