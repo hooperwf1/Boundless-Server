@@ -30,6 +30,7 @@ int grp_initGroup(struct clus_Cluster *g){
     }
 
 	g->id = -1;
+	g->type = TYPE_GROUP;
 
 	g->name = calloc(fig_Configuration.groupNameLength, sizeof(char));
 	if(g->name == NULL){
@@ -38,6 +39,32 @@ int grp_initGroup(struct clus_Cluster *g){
 	}
 
 	return 1;
+}
+
+struct clus_Cluster *grp_getGroup(char *name){
+	char data[2][1000];
+	int ret = chat_divideChanName(name, strlen(name), data);
+	if(ret == -1)
+		return NULL;
+
+	if(data[0][0] == '\0')
+		return &serverLists.groups[0];
+
+	if(data[0][0] != '&')
+		return NULL;
+
+	for(int i = 0; i < MAX_GROUPS; i++){
+		struct clus_Cluster *g = &serverLists.groups[i];
+
+		pthread_mutex_lock(&g->mutex);
+		if(!strncmp(g->name, name, fig_Configuration.groupNameLength)){
+			pthread_mutex_unlock(&g->mutex);
+			return g;
+		}
+		pthread_mutex_unlock(&g->mutex);
+	}
+
+	return NULL;
 }
 
 // Adds a group to the main list, and creates a default channel
@@ -92,30 +119,6 @@ struct clus_Cluster *grp_createGroup(char *name, struct usr_UserData *user, int 
 	log_logMessage(buff, INFO);
 
 	return group;
-}
-
-struct clus_Cluster *grp_getGroup(char *name){
-	struct clus_Cluster *group;
-
-	if(name[0] == '\0') // Null defaults to default group
-		return &serverLists.groups[0];
-
-	if(name[0] != '&')
-		return NULL;
-
-	for(int i = 0; i < MAX_GROUPS; i++){
-		group = &serverLists.groups[i];
-		pthread_mutex_lock(&group->mutex);
-
-		if(!strncmp(group->name, name, fig_Configuration.groupNameLength)){
-			pthread_mutex_unlock(&group->mutex);
-			return group;
-		}
-
-		pthread_mutex_unlock(&group->mutex);
-	}
-
-	return NULL;
 }
 
 struct clus_Cluster *grp_getChannel(struct clus_Cluster *group, char *name){

@@ -56,7 +56,7 @@ int init_chat(){
 	}
 
 	serverLists.groups = grp_createGroupArray(MAX_GROUPS);
-	grp_createGroup("&General-Chat", &serverLists.users[0], serverLists.max);
+	grp_createGroup(fig_Configuration.defaultGroup, &serverLists.users[0], serverLists.max);
 
     return chat_setupDataThreads(&fig_Configuration); 
 }
@@ -340,7 +340,7 @@ int chat_findCharacter(char *str, int size, char key){
 // Divide a string into groupname and channelname
 int chat_divideChanName(char *str, int size, char data[2][1000]){
 	if(str[0] == '#'){ // Only channel
-		data[0][0] = '\0';
+		strncpy(data[0], fig_Configuration.defaultGroup, ARRAY_SIZE(data[0]));
 		strncpy(data[1], str, ARRAY_SIZE(data[1]));
 		return 1;
 	}

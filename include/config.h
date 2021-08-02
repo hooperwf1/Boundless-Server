@@ -15,6 +15,7 @@
 struct fig_ConfigData {
 	char logDirectory[BUFSIZ];
 	char serverName[BUFSIZ];
+	char defaultGroup[BUFSIZ];
 	int useFile;
 	int port;
 	int threadsIO, threadsDATA;

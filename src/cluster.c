@@ -9,6 +9,29 @@ int clus_getClusterName(struct clus_Cluster *cluster, char *buff, int size){
 	return 1;
 }
 
+struct clus_Cluster *clus_getCluster(char *name){
+	struct clus_Cluster *group;
+
+	char data[2][1000] = {0};
+	int ret = chat_divideChanName(name, strlen(name), data);
+	if(ret == -1)
+		return NULL;
+
+	if(data[0][0] == '\0'){
+		group = &serverLists.groups[0];
+	} else {
+		group = grp_getGroup(data[0]);
+	}
+
+	if(group == NULL)
+		return NULL;
+
+	// Is a group
+	if(data[1][0] == '\0')
+		return group;
+
+	return grp_getChannel(group, data[1]);
+}
 
 // Add user to the group or channel
 struct clus_ClusterUser *clus_addUser(struct clus_Cluster *cluster, struct usr_UserData *user, int permLevel){
@@ -32,6 +55,30 @@ struct clus_ClusterUser *clus_addUser(struct clus_Cluster *cluster, struct usr_U
 
 	return grpUser;
 }
+
+int clus_removeUser(struct clus_Cluster *c, struct usr_UserData *user){
+    int ret = -1;
+
+	if(user == NULL || c == NULL)
+		return -1;
+
+	if(c->type == TYPE_GROUP)
+		chan_removeUserFromAllChannels(user, c);
+
+	pthread_mutex_lock(&c->mutex);
+	for(int i = 0; i < c->max; i++){
+		if(c->users[i].user == user){
+			// Match
+			memset(&c->users[i], 0, sizeof(struct clus_ClusterUser));
+			ret = 1;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&c->mutex);
+    
+    return ret;
+}
+
 
 struct clus_ClusterUser *clus_isInCluster(struct clus_Cluster *cluster, struct usr_UserData *user){
 	struct clus_ClusterUser *userData = NULL;

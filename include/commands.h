@@ -39,7 +39,7 @@ int cmd_addCommand(char *word, int minParams, int permLevel, int (*func)(struct 
 int cmd_runCommand(struct chat_Message *cmd);
 
 // Will check if a user is able to execute a command in a channel or group
-struct clus_Cluster *cmd_checkClusterPerms(struct chat_Message *msg, char *name, struct usr_UserData *user, int reqPrivs, int type);
+struct clus_Cluster *cmd_checkClusterPerms(struct chat_Message *msg, char *name, struct usr_UserData *user, int reqPrivs);
 
 // Change a user's nickname
 int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply);

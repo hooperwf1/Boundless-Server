@@ -9,12 +9,13 @@
 const char *options[] = {"port", "log", "enablelogging", "numiothreads", 
 						"numdatathreads", "numclients", "nicklength", 
 						"servername", "channelnamelength", "groupnamelength", 
-						"timeout", "messagelimit", "maxchannels"};
+						"timeout", "messagelimit", "maxchannels", "defaultgroup"};
 
 // Struct to store all config data
 struct fig_ConfigData fig_Configuration = {
 	.logDirectory = "/var/log/boundless-server",
 	.serverName = "example.boundless.chat",
+	.defaultGroup = "&General-Chat",
 	.useFile = 0,
 	.port = 6667,
 	.threadsIO = 1,
@@ -97,6 +98,11 @@ void fig_parseLine(char *line, int lineNo){
 		case 7:
 			//serverName
 			strncpy(fig_Configuration.serverName, words[1], ARRAY_SIZE(fig_Configuration.serverName));
+			break;
+
+		case 13:
+			//defaultGroup
+			strncpy(fig_Configuration.defaultGroup, words[1], ARRAY_SIZE(fig_Configuration.defaultGroup));
 			break;
 
 		case 2:

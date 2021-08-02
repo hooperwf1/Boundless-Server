@@ -25,6 +25,7 @@ int chan_initChannel(struct clus_Cluster *c){
 	}
 
 	c->id = -1;
+	c->type = TYPE_CHAN;
 
 	// Allocate channel names
 	c->name = calloc(fig_Configuration.chanNameLength, sizeof(char));
@@ -36,57 +37,16 @@ int chan_initChannel(struct clus_Cluster *c){
 	return 1;
 }
 
-int chan_removeUserFromChannel(struct clus_Cluster *channel, struct usr_UserData *user){
-    int ret = -1;
+void chan_removeUserFromAllChannels(struct usr_UserData *user, struct clus_Cluster *g){
+	if(g == NULL || user == NULL || g->type != TYPE_GROUP)
+		return;
 
-	pthread_mutex_lock(&channel->mutex);
-	for(int i = 0; i < channel->max; i++){
-		if(channel->users[i].user == user){
-			// Match
-			memset(&channel->users[i], 0, sizeof(struct clus_ClusterUser));
-			ret = 1;
-			break;
-		}
+	pthread_mutex_lock(&g->mutex);
+	for(int i = 0; i < fig_Configuration.maxChannels; i++){
+		struct clus_Cluster *chan = &g->ident.channels[i];
+		clus_removeUser(chan, user);
 	}
-	pthread_mutex_unlock(&channel->mutex);
-    
-    return ret;
-}
-
-int chan_removeUserFromAllChannels(UNUSED(struct usr_UserData *user)){
-    int ret = -1;
-/*
-    struct link_Node *node;
-    pthread_mutex_lock(&serverLists.channelsMutex);
-
-    for(node = serverLists.channels.head; node != NULL; node = node->next){
-            int num = chan_removeUserFromChannel(node, user);
-
-            ret = ret == -1 ? num : ret;
-    }
-
-    pthread_mutex_unlock(&serverLists.channelsMutex);
-	*/
-    
-    return ret;
-}
-
-// Use full name to get channel
-struct clus_Cluster *chan_getChannelByName(char *name){
-	struct clus_Cluster *group;
-
-	char data[2][1000] = {0};
-	int ret = chat_divideChanName(name, strlen(name), data);
-	if(ret == -1)
-		return NULL;
-
-	if(data[0][0] == '\0'){
-		group = &serverLists.groups[0];
-	} else {
-		group = grp_getGroup(data[0]);
-	}
-
-	return grp_getChannel(group, data[1]);
+	pthread_mutex_unlock(&g->mutex);
 }
 
 // Create a channel with the specified name

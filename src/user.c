@@ -139,9 +139,6 @@ int usr_deleteUser(struct usr_UserData *user){
     // Remove all pending messages
     com_cleanQueue(user);
 
-    // Channels
-    chan_removeUserFromAllChannels(user);
-
     // Groups
 
     return 1;

@@ -12,6 +12,7 @@ struct clus_ClusterUser {
 
 struct clus_Cluster { // Represents either a group or channel
 	int id;
+	int type; // TYPE_CHAN or TYPE_GROUP
 	char *name;
 	char modes[NUM_MODES];
 	char key[KEY_LEN];
@@ -30,8 +31,13 @@ struct clus_Cluster { // Represents either a group or channel
 // Returns cluster's name safely
 int clus_getClusterName(struct clus_Cluster *cluster, char *buff, int size);
 
+// Returns the cluster based on its name
+struct clus_Cluster *clus_getCluster(char *name);
+
 // Add a user to a cluster (channel or group)
 struct clus_ClusterUser *clus_addUser(struct clus_Cluster *cluster, struct usr_UserData *user, int permLevel);
+
+int clus_removeUser(struct clus_Cluster *c, struct usr_UserData *user);
 
 struct clus_ClusterUser *clus_isInCluster(struct clus_Cluster *cluster, struct usr_UserData *user);
 
