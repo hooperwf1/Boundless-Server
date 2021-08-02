@@ -1,7 +1,6 @@
 #include "user.h"
 
 size_t usr_globalUserID = 0;
-const char usr_userModes[] = {'i', 'o', 'r', 'a'};
 
 int usr_getNickname(char *buff, struct usr_UserData *user){
     if(user == NULL || user->id < 0){
@@ -188,6 +187,10 @@ void usr_changeUserMode(struct usr_UserData *user, char op, char mode){
 		return;
 	}
 
+	// May not set themselves as OP or registered or away
+	if(op == 'o' || op == 'r' || op == 'a')
+		return;
+
 	pthread_mutex_lock(&user->userMutex);
 	for(int i = 0; i < ARRAY_SIZE(user->modes); i++){
 		if(op == '-' && user->modes[i] == mode){
@@ -217,14 +220,4 @@ int usr_userHasMode(struct usr_UserData *user, char mode){
 	pthread_mutex_unlock(&user->userMutex);
 
 	return ret;
-}
-
-int usr_isUserMode(char mode){
-	for(int i = 0; i < ARRAY_SIZE(usr_userModes); i++){
-		if(mode == usr_userModes[i]){
-			return 1;
-		}
-	}
-	
-	return -1;
 }

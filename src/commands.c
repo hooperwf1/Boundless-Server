@@ -110,59 +110,35 @@ int cmd_runCommand(struct chat_Message *cmd){
     return ret;
 }
 
-struct link_Node *cmd_checkChannelPerms(struct chat_Message *msg, char *chanName, struct usr_UserData *user, int reqPrivs) {
-    struct link_Node *chan = chan_getChannelByName(chanName);
-	char *params[] = {chanName};
+struct clus_Cluster *cmd_checkClusterPerms(struct chat_Message *msg, char *name, struct usr_UserData *user, int reqPrivs, int type) {
+    struct clus_Cluster *cluster;
+	char *params[] = {name};
 
-    if(chan == NULL){
-        params[1] = (char *) invalidChanName;
+	if(type == TYPE_CHAN){
+		cluster = chan_getChannelByName(name);
+	} else {
+		cluster = grp_getGroup(name);
+	}
+
+    if(cluster == NULL){
+        params[1] = ":Invalid name!";
         chat_createMessage(msg, user, thisServer, ERR_NOSUCHCHANNEL, params, 2);
         return NULL;
     }
 
-	if(chan_isInChannel(chan, user) == NULL){
-		err_notonchannel(msg, chan->data, user);	
-		return NULL;
+	if(clus_isInCluster(cluster, user) == NULL){
+        params[1] = ":You are not in this user cluster!";
+        chat_createMessage(msg, user, thisServer, ERR_USERNOTINCHANNEL, params, 2);
+        return NULL;
 	}
 
-	if(chan_getUserChannelPrivs(user, chan) < reqPrivs) {
-		err_chanoprivsneeded(msg, chan->data, user);
-		return NULL;
+	if(clus_getUserClusterPrivs(user, cluster) < reqPrivs) {
+        params[1] = ":Insufficient permissions to run this command!";
+        chat_createMessage(msg, user, thisServer, ERR_CHANOPRIVSNEEDED, params, 2);
+        return NULL;
 	}
 
-	return chan;
-}
-
-// Generate a ERR_NOTONCHANNEL reply
-void err_notonchannel(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user){
-	char *params[] = {chan->name, ":You are not in this channel!"};
-	pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
-	chat_createMessage(msg, user, thisServer, ERR_NOTONCHANNEL, params, 2);
-	pthread_mutex_unlock(&chan->channelMutex);
-}
-
-// Generate a RPL_ENDOFNAMES reply
-void rpl_endofnames(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user){
-	char *params[] = {chan->name, ":End of /NAMES list"};
-	pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
-	chat_createMessage(msg, user, thisServer, RPL_ENDOFNAMES, params, 2);
-	pthread_mutex_unlock(&chan->channelMutex);
-}
-
-// Generate a ERR_USERNOTINCHANNEL reply
-void err_usernotinchannel(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user, char *nick){
-	char *params[] = {nick, chan->name, ":Selected user not in this channel!"};
-	pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
-	chat_createMessage(msg, user, thisServer, ERR_USERNOTINCHANNEL, params, 3);
-	pthread_mutex_unlock(&chan->channelMutex);
-}
-
-// Generate a ERR_CHANOPRIVSNEEDED reply
-void err_chanoprivsneeded(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user){
-	char *params[] = {chan->name, ":You don't have sufficient privileges for this channel!"};
-	pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
-	chat_createMessage(msg, user, thisServer, ERR_CHANOPRIVSNEEDED, params, 2);
-	pthread_mutex_unlock(&chan->channelMutex);
+	return cluster;
 }
 
 // Changes a user's nickname
@@ -218,7 +194,7 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
     struct usr_UserData *user = cmd->user;
     struct usr_UserData *otherUser;
-    struct link_Node *channel;
+    struct clus_Cluster *channel;
     char *params[ARRAY_SIZE(cmd->params)];
     int size = 1;
 
@@ -233,11 +209,11 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
             return -1;
         }
     } else { // To a channel
-		channel = cmd_checkChannelPerms(reply, cmd->params[0], user, 0);
+		channel = cmd_checkClusterPerms(reply, cmd->params[0], user, 0, TYPE_CHAN);
         if(channel == NULL)
 			return -1;
 
-		if(chan_channelHasMode('m', channel) == 1 && chan_getUserChannelPrivs(user, channel) < 1){
+		if(mode_arrayHasMode(channel, 'm') == 1 && clus_getUserClusterPrivs(user, channel) < 1){
 			chat_createMessage(reply, user, thisServer, ERR_CANNOTSENDTOCHAN, params, 1);
 			return -1;
 		}
@@ -256,7 +232,7 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
     }
 
 	reply->user = user;
-    chan_sendChannelMessage(reply, channel);
+    clus_sendClusterMessage(reply, channel);
     return 2;
 }
 
@@ -285,34 +261,34 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
 	// Sort out what to do regarding the group section
-	struct link_Node *groupNode = grp_getGroup(names[0]);
-	if(groupNode == NULL){ // Create a new group
-		groupNode = grp_createGroup(names[0], user);
+	struct clus_Cluster *group = grp_getGroup(names[0]);
+	if(group == NULL){ // Create a new group
+		group = grp_createGroup(names[0], user, 100);
 
-		if(groupNode == NULL){
-			chat_createMessage(reply, user, thisServer, ERR_NOSUCHGROUP, params, 1);
+		if(group == NULL){
+			chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
 			return -1;
 		}
 
 		// NAMES
 		char buff[fig_Configuration.groupNameLength];
-		grp_getName(groupNode, buff, ARRAY_SIZE(buff));
+		clus_getClusterName(group, buff, ARRAY_SIZE(buff));
 		strncat(namesCMD, buff, ARRAY_SIZE(namesCMD)-strlen(namesCMD)-2);
 	} else { // Join if not already in
-		if(grp_isInGroup(groupNode, user) == NULL){
-			struct grp_GroupUser *grpUsr = grp_addUser(groupNode, user, 0);
+		if(clus_isInCluster(group, user) == NULL){
+			struct clus_ClusterUser *grpUsr = clus_addUser(group, user, 0);
 			if(grpUsr == NULL){
 				// FULL
-				chat_createMessage(reply, user, thisServer, ERR_GROUPISFULL, params, 1);
+				chat_createMessage(reply, user, thisServer, ERR_CHANNELISFULL, params, 1);
 				return -1;
 			}
 
 			char buff[fig_Configuration.groupNameLength];
-			grp_getName(groupNode, buff, ARRAY_SIZE(buff));
+			clus_getClusterName(group, buff, ARRAY_SIZE(buff));
 
 			params[0] = buff;
 			chat_createMessage(reply, user, nick, "JOIN", params, 1);
-			grp_sendGroupMessage(reply, groupNode);
+			clus_sendClusterMessage(reply, group);
 			params[0] = cmd->params[0]; // Reset back to default
 
 			// NAMES
@@ -327,26 +303,26 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
 	// Sort out channel	
-	struct link_Node *channelNode = grp_getChannel(groupNode, names[1]);
-	if(channelNode == NULL){ // Create it
-		channelNode = chan_createChannel(names[1], groupNode, user);
+	struct clus_Cluster *channel = grp_getChannel(group, names[1]);
+	if(channel == NULL){ // Create it
+		channel = chan_createChannel(names[1], group, user);
 
-		if(channelNode == NULL){ // Still a problem
+		if(channel == NULL){ // Still a problem
 			chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
 			return -1;
 		}
 
 		if(cmd->paramCount > 1)
-			chan_setKey(channelNode, cmd->params[1]);
+			mode_setKey(channel, cmd->params[1]);
 	} else {
-		if(chan_checkKey(channelNode, cmd->params[1]) == -1){ // Invalid key
+		if(mode_checkKey(channel, cmd->params[1]) == -1){ // Invalid key
 			params[1] = cmd->params[0];
 			params[0] = nick;
 			chat_createMessage(reply, user, thisServer, ERR_BADCHANNELKEY, params, 2);
 			return -1;
 		}
 		
-		struct chan_ChannelUser *chanUsr = chan_addToChannel(channelNode, user, 0);
+		struct clus_ClusterUser *chanUsr = clus_addUser(channel, user, 0);
 		if(chanUsr == NULL){
 			// FULL
 			chat_createMessage(reply, user, thisServer, ERR_CHANNELISFULL, params, 1);
@@ -354,7 +330,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 		}
 
 		chat_createMessage(reply, user, nick, "JOIN", params, 1);
-		chan_sendChannelMessage(reply, channelNode);
+		clus_sendClusterMessage(reply, channel);
 	}
 
 	// Generate names for the JOIN
@@ -404,22 +380,22 @@ int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
 		params[3] = names;
 
 		// Check to see if channel is the correct one first
-		struct link_Node *chan = chan_getChannelByName(items[i]);
+		struct clus_Cluster *chan = chan_getChannelByName(items[i]);
 		if(chan == NULL && items[i][0] != '&'){ // Both invalid
 			params[0] = items[i];
 			chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
 			continue;
 		} else if(chan != NULL){ // Channel valid
-			chan_getUsersInChannel(chan, names, ARRAY_SIZE(names));
+			clus_getUsersInCluster(chan, names, ARRAY_SIZE(names));
 		} else { // Group valid
-			struct link_Node *group = grp_getGroup(items[i]);
+			struct clus_Cluster *group = grp_getGroup(items[i]);
 			if(group == NULL){
 				params[0] = items[i];
 				chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
 				continue;
 			}
 
-			grp_getUsersInGroup(group, names, ARRAY_SIZE(names));
+			clus_getUsersInCluster(group, names, ARRAY_SIZE(names));
 		}
 
 		chat_createMessage(reply, user, thisServer, RPL_NAMREPLY, params, 4);
@@ -439,7 +415,7 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
     char *params[ARRAY_SIZE(cmd->params)];
     int size = 1;
 
-    struct link_Node *channel = chan_getChannelByName(cmd->params[0]);
+    struct clus_Cluster *channel = chan_getChannelByName(cmd->params[0]);
     if(cmd->params[0][0] != '#' || channel == NULL){
         params[0] = (char *) invalidChanName;
         chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, size);
@@ -447,7 +423,8 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
     }
 
     if(chan_removeUserFromChannel(channel, user) < 0) { // Not in the channel
-		err_notonchannel(reply, channel->data, user);
+		params[1] = ":Not on the selected channel!";
+		chat_createMessage(reply, user, thisServer, ERR_USERNOTINCHANNEL, params, 2);
 		return 1;
 	}
 
@@ -458,7 +435,7 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
     size = 1;
 
     chat_createMessage(reply, user, nickname, "PART", params, size);
-    chan_sendChannelMessage(reply, channel);
+    clus_sendClusterMessage(reply, channel);
 
     return 1;
 }
@@ -470,14 +447,15 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply){
     char *params[ARRAY_SIZE(cmd->params)];
 	int size = 2;
 
-    struct link_Node *channel = cmd_checkChannelPerms(reply, cmd->params[0], user, 2);
+    struct clus_Cluster *channel = cmd_checkClusterPerms(reply, cmd->params[0], user, 2, TYPE_CHAN);
 	if(!channel){
 		return -1;
 	}
 
     otherUser = usr_getUserByName(cmd->params[1]);
     if(chan_removeUserFromChannel(channel, otherUser) < 0) { // Not in the channel
-		err_usernotinchannel(reply, channel->data, user, cmd->params[1]);
+		params[1] = ":Not on the selected channel!";
+		chat_createMessage(reply, user, thisServer, ERR_USERNOTINCHANNEL, params, 2);
 		return -1;
 	}
 
@@ -492,7 +470,7 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
     chat_createMessage(reply, otherUser, nickname, "KICK", params, size);
-    chan_sendChannelMessage(reply, channel);
+    clus_sendClusterMessage(reply, channel);
 
     return 1;
 }
@@ -521,18 +499,13 @@ int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
 	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
-		if(chat_isValidMode(cmd->params[1][i], type) == -1){
+		if(mode_isValidMode(cmd->params[1][i], type) == -1){
 			char rpl[20];
 			snprintf(rpl, ARRAY_SIZE(rpl), ":No such mode: %c", cmd->params[1][i]);
 
 			params[1] = rpl;
 			chat_createMessage(reply, user, thisServer, ERR_UNKNOWNMODE, params, 2);
 			return -1;
-		}
-
-		// May not set themselves as OP or registered or away
-		if(type == TYPE_USER && (cmd->params[1][i] == 'o' || cmd->params[1][i] == 'r' || cmd->params[1][i] == 'a')){
-			return 2; // Say nothing
 		}
 	}
 
@@ -579,9 +552,10 @@ int cmd_modeUser(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 }
 
 // Used by cmd_mode specifically for a channel
+// TODO - combine modeChan and modeGroup
 int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp){
     struct usr_UserData *user = cmd->user;
-	struct link_Node *channel = NULL;
+	struct clus_Cluster *channel = NULL;
     char *params[ARRAY_SIZE(cmd->params)];
 	char nickname[fig_Configuration.nickLen];
 	usr_getNickname(nickname, user);
@@ -591,7 +565,7 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 	params[1] = cmd->params[1];
 	params[2] = cmd->params[2];
 
-	channel = cmd_checkChannelPerms(reply, cmd->params[0], user, 2);
+	channel = cmd_checkClusterPerms(reply, cmd->params[0], user, 2, TYPE_CHAN);
 	if(!channel){
 		return -1;
 	}
@@ -610,46 +584,10 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 	}
 
 	chat_createMessage(reply, NULL, nickname, "MODE", params, 3+index);
-    chan_sendChannelMessage(reply, channel);
+    clus_sendClusterMessage(reply, channel);
 	return 2;
 }
 
-// Used by cmd_mode specifically for a group
-/*
-int cmd_modeGroup(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp){
-    struct usr_UserData *user = cmd->user;
-	struct link_Node *group = NULL;
-    char *params[ARRAY_SIZE(cmd->params)];
-	char nickname[fig_Configuration.nickLen];
-	usr_getNickname(nickname, user);
-
-	// Default values
-    params[0] = cmd->params[0];
-	params[1] = cmd->params[1];
-	params[2] = cmd->params[2];
-
-	group = cmd_checkChannelPerms(reply, cmd->params[0], user, 2);
-	if(!channel){
-		return -1;
-	}
-
-	// Set all the modes
-	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
-		//TODO - multiple data for multiple flags
-		char *ret = chan_executeChanMode(op, cmd->params[1][i], channel, cmd->params[2]);		
-		if(ret != NULL){
-			params[0] = nickname;
-			params[1] = params[2]; // Problematic value
-			chat_createMessage(reply, user, thisServer, ret, params, 1);
-			return -1;
-		}
-	}
-
-	chat_createMessage(reply, NULL, nickname, "MODE", params, 3);
-    chan_sendChannelMessage(reply, channel);
-	return 2;
-}
-*/
 
 // Send back a PONG
 int cmd_ping(struct chat_Message *cmd, struct chat_Message *reply){

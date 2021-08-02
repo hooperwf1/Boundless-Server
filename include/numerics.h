@@ -25,8 +25,4 @@
 #define ERR_CHANOPRIVSNEEDED "482"
 #define ERR_USERSDONTMATCH "502"
 
-// Custom
-#define ERR_NOSUCHGROUP "434"
-#define ERR_GROUPISFULL "435"
-
 #endif

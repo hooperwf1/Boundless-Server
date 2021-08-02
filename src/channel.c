@@ -1,46 +1,54 @@
 #include "channel.h"
 
-const char chan_chanModes[] = {'o', 's', 'i', 'b', 'v', 'm', 'k'};
+struct clus_Cluster *chan_createChannelArray(int size){
+	struct clus_Cluster *array = calloc(size, sizeof(struct clus_Cluster));
+	if(array == NULL){
+        log_logError("Error allocating channels", ERROR);
+        return NULL;
+	}
 
-int chan_getUserChannelPrivs(struct usr_UserData *user, struct link_Node *chan) {
-	if(chan == NULL || chan->data == NULL || user == NULL || user->id < 0){
+	for(int i = 0; i < size; i++){
+		if(chan_initChannel(&array[i]) == -1){
+			free(array);
+			return NULL;
+		}
+	}
+
+	return array;
+}
+
+int chan_initChannel(struct clus_Cluster *c){
+	int ret = pthread_mutex_init(&c->mutex, NULL);
+	if (ret < 0){
+		log_logError("Error initalizing pthread_mutex.", ERROR);
 		return -1;
 	}
 
-	struct chan_Channel *channel = chan->data;
-	int ret = -1;
+	c->id = -1;
 
-    pthread_mutex_lock(&channel->channelMutex);
-	for(int i = 0; i < channel->max; i++){
-		if(channel->users[i].user == user){
-			ret = channel->users[i].permLevel;
-			break;
-		}
+	// Allocate channel names
+	c->name = calloc(fig_Configuration.chanNameLength, sizeof(char));
+	if(c->name == NULL){
+		log_logError("Error allocating channel name", ERROR);
+		return -1;
 	}
-    pthread_mutex_unlock(&channel->channelMutex);
 
-	return ret;
+	return 1;
 }
 
-int chan_removeUserFromChannel(struct link_Node *channelNode, struct usr_UserData *user){
-    struct chan_Channel *channel = channelNode->data;
+int chan_removeUserFromChannel(struct clus_Cluster *channel, struct usr_UserData *user){
     int ret = -1;
 
-    if(channel == NULL || user == NULL){
-        log_logMessage("Cannot remove user from channel", DEBUG);
-        return -1;
-    }
-
-	pthread_mutex_lock(&channel->channelMutex);
+	pthread_mutex_lock(&channel->mutex);
 	for(int i = 0; i < channel->max; i++){
 		if(channel->users[i].user == user){
 			// Match
-			memset(&channel->users[i], 0, sizeof(struct chan_ChannelUser));
+			memset(&channel->users[i], 0, sizeof(struct clus_ClusterUser));
 			ret = 1;
 			break;
 		}
 	}
-	pthread_mutex_unlock(&channel->channelMutex);
+	pthread_mutex_unlock(&channel->mutex);
     
     return ret;
 }
@@ -64,8 +72,8 @@ int chan_removeUserFromAllChannels(UNUSED(struct usr_UserData *user)){
 }
 
 // Use full name to get channel
-struct link_Node *chan_getChannelByName(char *name){
-	struct link_Node *group;
+struct clus_Cluster *chan_getChannelByName(char *name){
+	struct clus_Cluster *group;
 
 	char data[2][1000] = {0};
 	int ret = chat_divideChanName(name, strlen(name), data);
@@ -73,7 +81,7 @@ struct link_Node *chan_getChannelByName(char *name){
 		return NULL;
 
 	if(data[0][0] == '\0'){
-		group = serverLists.groups.head;
+		group = &serverLists.groups[0];
 	} else {
 		group = grp_getGroup(data[0]);
 	}
@@ -81,108 +89,62 @@ struct link_Node *chan_getChannelByName(char *name){
 	return grp_getChannel(group, data[1]);
 }
 
-// Returns full channel name
-int chan_getName(struct link_Node *channelNode, char *buff, int size){
-	struct chan_Channel *channel = channelNode->data;
-	if(channel == NULL)
-		return -1;
-
-	struct grp_Group *group = channel->group->data;
-	if(group == NULL)
-		return -1;
-
-	pthread_mutex_lock(&channel->channelMutex);
-	pthread_mutex_lock(&group->groupMutex);
-	snprintf(buff, size, "%s/%s", group->name, channel->name);
-	pthread_mutex_unlock(&group->groupMutex);
-	pthread_mutex_unlock(&channel->channelMutex);
-
-	return 1;
-}
-
 // Create a channel with the specified name
-// TODO - error checking with link_List
-struct link_Node *chan_createChannel(char *name, struct link_Node *group, struct usr_UserData *user){
+struct clus_Cluster *chan_createChannel(char *name, struct clus_Cluster *group, struct usr_UserData *user){
     if(name[0] != '#'){
         return NULL;
     }
 
-    struct chan_Channel *channel;
-    channel = calloc(1, sizeof(struct chan_Channel));
-    if(channel == NULL){
-        log_logError("Error creating channel", ERROR);
-        return NULL;
-    }
-	channel->name = calloc(fig_Configuration.chanNameLength, sizeof(char));
-    if(channel->name == NULL){
-        log_logError("Error creating channel", ERROR);
-		free(channel);
-        return NULL;
-    }
+    // Add to the group
+	if(group == NULL)
+		group = &serverLists.groups[0]; // Default group
 
-    // Initalize mutex to prevent locking issues
-    int ret = pthread_mutex_init(&channel->channelMutex, NULL);
-    if (ret < 0){
-        log_logError("Error initalizing pthread_mutex.", ERROR);
-		free(channel->name);
-		free(channel);
-        return NULL;
-    }
+    struct clus_Cluster *channel; // Find empty spot
+	for(int i = 0; i < fig_Configuration.maxChannels; i++){
+		channel = &group->ident.channels[i];
+
+		if(channel->id == -1){
+			break;
+		}
+	
+		channel = NULL;
+	}
+
+	if(channel == NULL){
+		return NULL; // Full
+	}
 
     // TODO - make sure name is legal
     strncpy(channel->name, name, fig_Configuration.chanNameLength-1);
 
 	// Setup array of users with default size of 10
-	channel->max = 100;
-	channel->users = calloc(channel->max, sizeof(struct chan_Channel));
+	channel->max = 10;
+	channel->users = calloc(channel->max, sizeof(struct clus_ClusterUser));
 	if(channel->users == NULL){
-        log_logError("Error creating channel", ERROR);
-		free(channel->name);
+        log_logError("Error allocating channel users", ERROR);
 		free(channel);
         return NULL;
 	}
 
-    // Add to the group
-	if(group == NULL)
-		group = serverLists.groups.head; // Default group
-
-	channel->group = group;
-	struct link_Node *chanNode = grp_addChannel(group, channel);
+	channel->ident.group = group;
 
 	if(user != NULL){ // Add first user
-		chan_addToChannel(chanNode, user, 2);
+		clus_addUser(channel, user, 2);
 	}
 
-	return chanNode;
-}
+	char buff[1024];
+	snprintf(buff, ARRAY_SIZE(buff), "Created new channel: %s", name);
+	log_logMessage(buff, INFO);
 
-int chan_channelHasMode(char mode, struct link_Node *channelNode){
-	struct chan_Channel *channel = channelNode->data;
-	int ret = -1;
-
-	if(channelNode == NULL || channel == NULL){
-		return -1;
-	}
-
-	pthread_mutex_lock(&channel->channelMutex);
-	for (int i = 0; i < ARRAY_SIZE(channel->modes); i++){
-		if(channel->modes[i] == mode) {
-			ret = 1;
-			break;
-		}
-	}
-	pthread_mutex_unlock(&channel->channelMutex);
-
-	return ret;
+	return channel;
 }
 
 // Takes a channel mode and executes it
-char *chan_executeChanMode(char op, char mode, struct link_Node *channelNode, char *data, int *index){
+char *chan_executeChanMode(char op, char mode, struct clus_Cluster *channel, char *data, int *index){
 	int perm = 1;
-	struct chan_Channel *channel = channelNode->data;
 	struct usr_UserData *user;
 
-	if(channelNode == NULL || channel == NULL){
+	if(channel == NULL){
 		return ERR_NOSUCHCHANNEL;
 	}
 
@@ -197,249 +159,35 @@ char *chan_executeChanMode(char op, char mode, struct link_Node *channelNode, ch
 			if(user == NULL){
 				return ERR_NOSUCHNICK;
 			}
-			return chan_giveChanPerms(channelNode, user, op, perm);	
+			return chan_giveChanPerms(channel, user, op, perm);	
 
 		case 'k':
 			if(op == '+')
-				return chan_setKey(channelNode, data);
-			return chan_removeKey(channelNode, data);
+				return mode_setKey(channel, data);
+			return mode_removeKey(channel, data);
 		
 		default: // No special action needed, simply add it to the array
 			*index -= 1; // Undo addition (No data used)
-			chan_changeChannelModeArray(op, mode, channelNode);
+			mode_editArray(channel, op, mode);
 	}
 
 	return NULL; // Successfull - no error message
 }
 
-// Adds or removes a mode from a channel's modes array
-void chan_changeChannelModeArray(char op, char mode, struct link_Node *channelNode){
-	struct chan_Channel *channel = channelNode->data;
-
-	if(channelNode == NULL || channel == NULL)
-		return;
-
-	// Guarantee that mode only appears once
-	if(op == '+' && chan_channelHasMode(mode, channelNode) == 1)
-		return;
-
-	pthread_mutex_lock(&channel->channelMutex);
-	for(int i = 0; i < ARRAY_SIZE(channel->modes); i++){
-		if(op == '+'){
-			if(channel->modes[i] == '\0'){
-				channel->modes[i] = mode;
-				break;
-			}
-		} else {
-			if(channel->modes[i] == mode){ 
-				channel->modes[i] = '\0';
-				break;
-			}
-		}
-	}
-	pthread_mutex_unlock(&channel->channelMutex);
-}
-
-int chan_isChanMode(char mode){
-	for(int i = 0; i < ARRAY_SIZE(chan_chanModes); i++){
-		if(mode == chan_chanModes[i]){
-			return 1;
-		}
-	}
-	
-	return -1;
-}
-
-// Sets the channel's key
-char *chan_setKey(struct link_Node *channelNode, char *key){
-	struct chan_Channel *channel = channelNode->data;
-	if(channelNode == NULL || channel == NULL)
-		return ERR_UNKNOWNERROR;
-
-	if(key == NULL)
-		return ERR_NEEDMOREPARAMS;
-
-	if(chan_channelHasMode('k', channelNode) == 1)
-		return ERR_KEYSET;
-
-	pthread_mutex_lock(&channel->channelMutex);
-	strncpy(channel->key, key, ARRAY_SIZE(channel->key)-1);
-	pthread_mutex_unlock(&channel->channelMutex);
-
-	chan_changeChannelModeArray('+', 'k', channelNode);
-
-	return NULL;
-}
-
-char *chan_removeKey(struct link_Node *channelNode, char *key){
-	struct chan_Channel *channel = channelNode->data;
-	if(channelNode == NULL || channel == NULL)
-		return ERR_UNKNOWNERROR;
-
-	if(key == NULL)
-		return ERR_NEEDMOREPARAMS;
-
-	// If keys match, remove channel's key
-	pthread_mutex_lock(&channel->channelMutex);
-	if(sec_constantStrCmp(channel->key, key, ARRAY_SIZE(channel->key)-1) == 1){
-		channel->key[0] = '\0';
-	} else {
-		pthread_mutex_unlock(&channel->channelMutex);
-		return ERR_BADCHANNELKEY;
-	}
-	pthread_mutex_unlock(&channel->channelMutex);
-
-	chan_changeChannelModeArray('-', 'k', channelNode);
-
-	return NULL;
-}
-
-// Checks if key matches, if no key then automatically correct
-int chan_checkKey(struct link_Node *channelNode, char *key){
-	struct chan_Channel *channel = channelNode->data;
-	int ret = -1;
-	if(channelNode == NULL || channel == NULL)
-		return -1;
-
-	// No need to check if there is no key to validate
-	if(chan_channelHasMode('k', channelNode) == -1)
-		return 1;
-
-	if(key == NULL)
-		return -1;
-
-	// If keys match, remove channel's key
-	pthread_mutex_lock(&channel->channelMutex);
-	if(sec_constantStrCmp(channel->key, key, ARRAY_SIZE(channel->key)-1) == 1){
-		ret = 1;
-	}
-	pthread_mutex_unlock(&channel->channelMutex);
-
-	return ret;
-}
-
 // Remove or give chan op or voice
-char *chan_giveChanPerms(struct link_Node *channelNode, struct usr_UserData *user, char op, int perm){
-	if(channelNode == NULL || channelNode->data == NULL){
-		return ERR_UNKNOWNERROR;
-	}
-
-    struct chan_Channel *channel = channelNode->data;
-	struct chan_ChannelUser *chanUser = chan_isInChannel(channelNode, user);
+char *chan_giveChanPerms(struct clus_Cluster *channel, struct usr_UserData *user, char op, int perm){
+	struct clus_ClusterUser *chanUser = clus_isInCluster(channel, user);
 	if(chanUser == NULL){
 		return ERR_USERNOTINCHANNEL;
 	}
 
-    pthread_mutex_lock(&channel->channelMutex);
+    pthread_mutex_lock(&channel->mutex);
 	if(op == '-'){
 		chanUser->permLevel = 0;
 	} else {
 		chanUser->permLevel = perm;
 	}
-    pthread_mutex_unlock(&channel->channelMutex);
+    pthread_mutex_unlock(&channel->mutex);
 
 	return NULL;
 }
-
-// Check if a user is in a channel
-struct chan_ChannelUser *chan_isInChannel(struct link_Node *channelNode, struct usr_UserData *user){
-	if(user == NULL || channelNode == NULL || channelNode->data == NULL){
-		return NULL;
-	}
-
-    struct chan_Channel *channel = channelNode->data;
-	struct chan_ChannelUser *ret = NULL;
-
-    pthread_mutex_lock(&channel->channelMutex);
-	for(int i = 0; i < channel->max; i++){
-		if(channel->users[i].user == user){
-            ret = &channel->users[i];
-			break;
-		}
-	}
-    pthread_mutex_unlock(&channel->channelMutex);
-
-    return ret;
-}
-
-// Add a user to a channel
-struct chan_ChannelUser *chan_addToChannel(struct link_Node *channelNode, struct usr_UserData *user, int permLevel){
-    struct chan_Channel *channel = channelNode->data;
-	struct chan_ChannelUser *chanUser = chan_isInChannel(channelNode, user);
-
-    if(chanUser == NULL){ // Not in the channel
-        pthread_mutex_lock(&channel->channelMutex);
-		for(int i = 0; i < channel->max; i++){
-			if(channel->users[i].user == NULL){ // Empty spot
-				channel->users[i].user = user;
-				channel->users[i].permLevel = permLevel;
-				chanUser = &channel->users[i];
-				break;
-			}
-		}
-        pthread_mutex_unlock(&channel->channelMutex);
-    }
-
-    return chanUser;
-}
-
-// Will fill a string with a list of users
-int chan_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
-    struct chan_Channel *channel = channelNode->data;
-    char nickname[fig_Configuration.nickLen];
-    int pos = 1;
-
-	strncpy(buff, ":", size);
-    pthread_mutex_lock(&channel->channelMutex);
-	for(int i = 0; i < channel->max; i++){
-		if(channel->users[i].user != NULL){
-			switch(channel->users[i].permLevel) {
-				case 2: // Channel operator
-					strncat(buff, "@", size - pos - 1);
-					pos++;
-					break;
-
-				case 1: // Channel voice
-					strncat(buff, "+", size - pos - 1);
-					pos++;
-					break;
-			}
-
-			usr_getNickname(nickname, channel->users[i].user);
-			strncat(buff, nickname, size - pos - 1);
-			pos = strlen(buff);
-
-			// Space inbetween users
-			buff[pos] = ' ';
-			buff[pos + 1] = '\0';
-			pos++;
-		}
-    }
-    pthread_mutex_unlock(&channel->channelMutex);
-
-    return 1;
-}
-
-// Send a message to every user in a channel
-int chan_sendChannelMessage(struct chat_Message *cmd, struct link_Node *channelNode){
-	struct usr_UserData *origin = cmd->user;
-    struct chan_Channel *channel = channelNode->data;
-
-    pthread_mutex_lock(&channel->channelMutex);
-	for(int i = 0; i < channel->max; i++){
-        cmd->user = channel->users[i].user;
-		
-		// Dont send to sender or invalid users
-		if(cmd->user == origin || cmd->user == NULL){
-			continue;
-		}
-
-        chat_sendMessage(cmd);
-    }
-    pthread_mutex_unlock(&channel->channelMutex);
-
-	cmd->user = origin;
-
-    return 1;
-}
-

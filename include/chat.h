@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include "modes.h"
 #include "communication.h"
 #include "logging.h"
 #include "linkedlist.h"
@@ -11,34 +12,24 @@
 #include "user.h"
 #include "channel.h"
 #include "group.h"
+#include "cluster.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
+#define MAX_GROUPS 1000
 
-#define TYPE_USER 0
-#define TYPE_CHAN 1
-#define TYPE_GROUP 2
-
-#define NUM_MODES 15
-
-/*  Note about the structure of the users
-    All new users are added to the main linked
-    list via malloc. All other uses to users should
-    access the user through a pointer to the pointer
-    inside the main list so that one free() will notify
-    all other pointers that the user no longer exists
-*/
-struct chat_ServerLists {
-	int max;
-	int connected;
-	struct usr_UserData *users;
-	struct link_List groups;	
-	pthread_mutex_t groupsMutex;
-};
+struct clus_Cluster;
 
 struct chat_DataQueue {
     struct link_List queue;
     pthread_t *threads;
     pthread_mutex_t queueMutex;
+};
+
+struct chat_ServerLists {
+	int max;
+	int connected;
+	struct usr_UserData *users;
+	struct clus_Cluster *groups;
 };
 
 // Contains all parts of a typical message
@@ -97,8 +88,5 @@ int chat_findCharacter(char *str, int size, char key);
 
 // Divide a string into groupname and channelname
 int chat_divideChanName(char *str, int size, char data[2][1000]);
-
-// Checks if a given mode is valid
-int chat_isValidMode(char mode, int type);
 
 #endif

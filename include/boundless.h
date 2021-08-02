@@ -1,6 +1,9 @@
 #ifndef boundless_h
 #define boundless_h
 
+#define NUM_MODES 15
+#define KEY_LEN 20
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -9,6 +12,7 @@
 #include "config.h"
 #include "communication.h"
 #include "linkedlist.h"
+#include "modes.h"
 #include "chat.h"
 #include "commands.h"
 #include "security.h"

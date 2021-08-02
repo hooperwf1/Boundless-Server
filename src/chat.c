@@ -34,12 +34,6 @@ int init_chat(){
         return -1;
     }
 
-    ret = pthread_mutex_init(&serverLists.groupsMutex, NULL);
-    if (ret < 0){
-        log_logError("Error initalizing pthread_mutex.", ERROR);
-        return -1;
-    }
-
 	// Allocate users array
 	serverLists.users = calloc(fig_Configuration.clients, sizeof(struct usr_UserData));
 	if(serverLists.users == NULL){
@@ -61,7 +55,8 @@ int init_chat(){
 		}
 	}
 
-	grp_createGroup("&General-Chat", &serverLists.users[0]);
+	serverLists.groups = grp_createGroupArray(MAX_GROUPS);
+	grp_createGroup("&General-Chat", &serverLists.users[0], serverLists.max);
 
     return chat_setupDataThreads(&fig_Configuration); 
 }
@@ -365,16 +360,4 @@ int chat_divideChanName(char *str, int size, char data[2][1000]){
 	strncpy(data[0], str, divide);
 	strncpy(data[1], &str[divide+1], ARRAY_SIZE(data[1]));
 	return 1;
-}
-
-int chat_isValidMode(char mode, int type){
-	switch (type){
-		case TYPE_GROUP:
-			return grp_isGroupMode(mode);
-
-		case TYPE_CHAN:
-			return chan_isChanMode(mode);
-	}
-	
-	return usr_isUserMode(mode);
 }

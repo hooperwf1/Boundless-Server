@@ -1,6 +1,7 @@
 #ifndef user_h
 #define user_h
 
+#include "boundless.h"
 #include "chat.h"
 #include <time.h>
 
@@ -49,7 +50,5 @@ void usr_changeUserMode(struct usr_UserData *user, char op, char mode);
 
 // Checks if a user has a mode active
 int usr_userHasMode(struct usr_UserData *user, char mode);
-
-int usr_isUserMode(char mode);
 
 #endif

@@ -2,6 +2,7 @@
 #define cmds_h
 
 #include "chat.h"
+#include "modes.h"
 #include "linkedlist.h"
 #include "numerics.h"
 #include "user.h"
@@ -37,17 +38,8 @@ int cmd_addCommand(char *word, int minParams, int permLevel, int (*func)(struct 
 
 int cmd_runCommand(struct chat_Message *cmd);
 
-// Will check if a user is able to execute a command in a channel
-struct link_Node *cmd_checkChannelPerms(struct chat_Message *msg, char *chanName, struct usr_UserData *user, int reqPrivs);
-
-/* Reply generators */
-void err_notonchannel(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user);
-
-void rpl_endofnames(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user);
-
-void err_usernotinchannel(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user, char *nick);
-
-void err_chanoprivsneeded(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user);
+// Will check if a user is able to execute a command in a channel or group
+struct clus_Cluster *cmd_checkClusterPerms(struct chat_Message *msg, char *name, struct usr_UserData *user, int reqPrivs, int type);
 
 // Change a user's nickname
 int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply);
@@ -71,7 +63,6 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply);
 int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply);
 int cmd_modeUser(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
 int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
-int cmd_modeGroup(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
 
 // Send back a PONG
 int cmd_ping(struct chat_Message *cmd, struct chat_Message *reply);
