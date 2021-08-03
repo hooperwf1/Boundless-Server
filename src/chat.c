@@ -12,8 +12,6 @@ struct chat_ServerLists serverLists = {0};
 struct chat_DataQueue dataQueue = {0};
 
 int init_chat(){
-	char buff[100];
-
 	// Compensate for null byte '\0'
 	fig_Configuration.nickLen++; 
 	fig_Configuration.groupNameLength++;
@@ -35,25 +33,7 @@ int init_chat(){
     }
 
 	// Allocate users array
-	serverLists.users = calloc(fig_Configuration.clients, sizeof(struct usr_UserData));
-	if(serverLists.users == NULL){
-        log_logError("Error initalizing users list.", ERROR);
-        return -1;
-	}
-	snprintf(buff, ARRAY_SIZE(buff), "Maximum user count: %d.", serverLists.max);
-	log_logMessage(buff, INFO);
-
-	// Set id of all users to -1 and init their mutexes
-	for (int i = 0; i < serverLists.max; i++){
-		serverLists.users[i].id = -1;
-
-		// Initalize mutex to prevent locking issues
-		ret = pthread_mutex_init(&serverLists.users[i].userMutex, NULL);
-		if (ret < 0){
-			log_logError("Error initalizing pthread_mutex.", ERROR);
-			return -1;
-		}
-	}
+	serverLists.users = usr_createUserArray(fig_Configuration.clients);
 
 	serverLists.groups = grp_createGroupArray(MAX_GROUPS);
 	grp_createGroup(fig_Configuration.defaultGroup, &serverLists.users[0], serverLists.max);
@@ -247,9 +227,9 @@ int chat_sendServerMessage(struct chat_Message *cmd){
     for(int i = 0; i < serverLists.max; i++){
         user = &serverLists.users[i];
 
-		pthread_mutex_lock(&user->userMutex);
+		pthread_mutex_lock(&user->mutex);
 		int id = user->id;
-		pthread_mutex_unlock(&user->userMutex);
+		pthread_mutex_unlock(&user->mutex);
 
 		if(user == cmd->user){ // Dont send to sender
 			continue;

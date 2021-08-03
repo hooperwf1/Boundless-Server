@@ -35,7 +35,12 @@ void *link_remove(struct link_List *list, int pos);
 
 void *link_removeNode(struct link_List *list, struct link_Node *node);
 
+// Removes and frees a linked list
+void link_clear(struct link_List *list);
+
 int link_containsNode(struct link_List *list, struct link_Node *node);
+
+int link_contains(struct link_List *list, void *data);
 
 int link_indexOf(struct link_List *list, struct link_Node *target);
 

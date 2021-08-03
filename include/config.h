@@ -22,7 +22,7 @@ struct fig_ConfigData {
 	int clients;
 	int nickLen, chanNameLength, groupNameLength;
 	int timeOut, messageLimit;
-	int maxChannels;
+	int maxChannels, maxUserGroups;
 };	
 
 // Struct to store all config data

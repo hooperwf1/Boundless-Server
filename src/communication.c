@@ -88,9 +88,9 @@ int com_sendStr(struct usr_UserData *user, char *msg){
     com_insertQueue(job);
 
 	// Safely get user's socket
-	pthread_mutex_lock(&user->userMutex);
+	pthread_mutex_lock(&user->mutex);
 	int sock = user->socketInfo.socket2;
-	pthread_mutex_unlock(&user->userMutex);
+	pthread_mutex_unlock(&user->mutex);
 
 	// Setup to allow for a write
 	struct epoll_event ev = {.events = EPOLLOUT|EPOLLONESHOT};
@@ -102,22 +102,6 @@ int com_sendStr(struct usr_UserData *user, char *msg){
 	}
 
     return 1;
-}
-
-// Will remove all remaining jobs in a user's queue
-int com_cleanQueue(struct usr_UserData *user){
-	if(user == NULL)
-		return -1;
-
-	pthread_mutex_lock(&user->userMutex); 
-
-	while(link_isEmpty(&user->sendQ) == -1){ // Keep removing items until empty
-		free(link_remove(&user->sendQ, 0));
-	}
-
-	pthread_mutex_unlock(&user->userMutex); 
-
-	return 1;
 }
 
 int com_insertQueue(struct com_QueueJob *job){
@@ -133,12 +117,12 @@ int com_insertQueue(struct com_QueueJob *job){
         return -1; 
     }
 
-    pthread_mutex_lock(&user->userMutex);
+    pthread_mutex_lock(&user->mutex);
 	struct link_Node *ret = link_add(&user->sendQ, job);
 	if(ret == NULL){
 		log_logMessage("Error adding job to queue", WARNING);
 	}
-    pthread_mutex_unlock(&user->userMutex);
+    pthread_mutex_unlock(&user->mutex);
 
     return 1;
 }
@@ -197,11 +181,11 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 
 		default: ; 
 			// Check time inbetween messages (too fast == quit)
-			pthread_mutex_lock(&user->userMutex);
+			pthread_mutex_lock(&user->mutex);
 			double timeDifference = difftime(time(NULL), user->lastMsg);
 			user->lastMsg = time(NULL);
 			user->pinged = -1; // Reset ping
-			pthread_mutex_unlock(&user->userMutex);
+			pthread_mutex_unlock(&user->mutex);
 
 			if(timeDifference < (double) messageLimit){
 				log_logMessage("User sending messages too fast.", INFO);
@@ -237,11 +221,11 @@ int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
 
 	// Remove the first job
 	struct com_QueueJob *job = NULL;
-	pthread_mutex_lock(&user->userMutex);
+	pthread_mutex_lock(&user->mutex);
 	if(link_isEmpty(&user->sendQ) == -1){
 		job = link_removeNode(&user->sendQ, user->sendQ.head);
 	}
-	pthread_mutex_unlock(&user->userMutex);
+	pthread_mutex_unlock(&user->mutex);
 
 	if(job == NULL)
 		return -1;
@@ -250,11 +234,11 @@ int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
 	strncpy(buff, job->str, ARRAY_SIZE(buff));
 	free(job);
 
-	pthread_mutex_lock(&user->userMutex);
+	pthread_mutex_lock(&user->mutex);
 	int socket = user->socketInfo.socket2;
 	if(user->id < 0)
 		socket = -1;
-	pthread_mutex_unlock(&user->userMutex);
+	pthread_mutex_unlock(&user->mutex);
 
 	if(socket < 0)
 		return -1;
@@ -279,7 +263,6 @@ int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
 	return 0;
 }
 
-// TODO - clean this mess of a method up
 void *com_communicateWithClients(void *param){
     int *epollfd = param;
 	struct usr_UserData *user;

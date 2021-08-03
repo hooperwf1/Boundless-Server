@@ -98,6 +98,12 @@ void *link_removeNode(struct link_List *list, struct link_Node *node){
 
 }
 
+void link_clear(struct link_List *list){
+	while(link_isEmpty(list) == -1){ // Keep removing items until empty
+		free(link_remove(list, 0));
+	}
+}
+
 int link_containsNode(struct link_List *list, struct link_Node *node){
     struct link_Node *n;
 
@@ -108,6 +114,18 @@ int link_containsNode(struct link_List *list, struct link_Node *node){
     }
 
     return -1;
+}
+
+int link_contains(struct link_List *list, void *data){
+    struct link_Node *n;
+
+    for(n = list->head; n != NULL; n = n->next){
+        if(data == n->data){
+            return 1;
+        }
+    }
+
+	return -1;
 }
 
 int link_indexOf(struct link_List *list, struct link_Node *target){

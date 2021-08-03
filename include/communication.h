@@ -13,6 +13,7 @@
 #include <sys/epoll.h>
 #include <limits.h>
 #include <time.h>
+#include <stdatomic.h>
 #include "logging.h"
 #include "config.h"
 #include "linkedlist.h"
@@ -25,18 +26,19 @@
  */
 
 // Jobs for queues
-// TODO - combine str and msg into a union
 struct com_QueueJob {
     int type;
     struct usr_UserData *user;
-    char str[1024];
-    struct chat_Message *msg; 
+	union {
+		char str[1024];
+		struct chat_Message *msg; 
+	};
 };
 
 //struct to store data about the socket, and its file descriptor
 struct com_SocketInfo {
-    int socket;
-	int socket2; // Used for filtering epoll writing events
+    atomic_int socket;
+	atomic_int socket2; // Used for filtering epoll writing events
     struct sockaddr_storage addr;
 };
 
@@ -50,9 +52,6 @@ void com_close();
 
 // Will send a string to client inside node, also appends \r\n
 int com_sendStr(struct usr_UserData *user, char *msg);
-
-// Remove all user jobs from queue
-int com_cleanQueue(struct usr_UserData *user);
 
 // Insert selected job into the queue
 int com_insertQueue(struct com_QueueJob *job);

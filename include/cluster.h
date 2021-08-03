@@ -2,28 +2,29 @@
 #define cluster_h
 
 #include "boundless.h"
+#include <stdatomic.h>
 
 struct clus_ClusterUser {
 	struct usr_UserData *user;
-	int permLevel; 
+	atomic_int permLevel; 
 	// Channels 0 - Default, 1 - chanvoice, 2 - chanop, 3 - groupop
 	// Groups 0 - Default, 1 - halfop, 2 - groupop
 };
 
 struct clus_Cluster { // Represents either a group or channel
-	int id;
-	int type; // TYPE_CHAN or TYPE_GROUP
+	atomic_int id;
+	atomic_int type; // TYPE_CHAN or TYPE_GROUP
 	char *name;
 	char modes[NUM_MODES];
 	char key[KEY_LEN];
-	int max;
+	atomic_int max;
 	struct clus_ClusterUser *users;
 
 	// Identifies the group for channel, and the channels for a group
 	union {
 		struct clus_Cluster *group;
 		struct clus_Cluster *channels;
-	} ident;
+	};
 
 	pthread_mutex_t mutex;
 };

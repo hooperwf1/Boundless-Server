@@ -38,6 +38,9 @@ int grp_initGroup(struct clus_Cluster *g){
 		return -1;
 	}
 
+	// Allocate channels
+	g->channels = chan_createChannelArray(fig_Configuration.maxChannels);
+
 	return 1;
 }
 
@@ -63,6 +66,26 @@ struct clus_Cluster *grp_getGroup(char *name){
 		}
 		pthread_mutex_unlock(&g->mutex);
 	}
+
+	return NULL;
+}
+
+struct clus_Cluster *grp_getChannel(struct clus_Cluster *group, char *name){
+	struct clus_Cluster *channel;
+
+	pthread_mutex_lock(&group->mutex);
+	for(int i = 0; i < fig_Configuration.maxChannels; i++){
+		channel = &group->channels[i];
+
+		pthread_mutex_lock(&channel->mutex);
+		if(!strncmp(channel->name, name, fig_Configuration.chanNameLength)){
+			pthread_mutex_unlock(&channel->mutex);
+			pthread_mutex_unlock(&group->mutex);
+			return channel;
+		}
+		pthread_mutex_unlock(&channel->mutex);
+	}
+	pthread_mutex_unlock(&group->mutex);
 
 	return NULL;
 }
@@ -93,9 +116,6 @@ struct clus_Cluster *grp_createGroup(char *name, struct usr_UserData *user, int 
 		return NULL;
 	}
 
-	// Allocate channels
-	group->ident.channels = chan_createChannelArray(fig_Configuration.maxChannels);
-
 	// Set name
 	strncpy(group->name, name, fig_Configuration.groupNameLength-1);
 
@@ -114,6 +134,8 @@ struct clus_Cluster *grp_createGroup(char *name, struct usr_UserData *user, int 
 	// Generate a default Channel
 	chan_createChannel("#default", group, user);
 
+	group->id = 1; // Load from memory later TODO
+
 	char buff[1024];
 	snprintf(buff, ARRAY_SIZE(buff), "Created new group: %s", name);
 	log_logMessage(buff, INFO);
@@ -121,22 +143,11 @@ struct clus_Cluster *grp_createGroup(char *name, struct usr_UserData *user, int 
 	return group;
 }
 
-struct clus_Cluster *grp_getChannel(struct clus_Cluster *group, char *name){
-	struct clus_Cluster *channel;
+void grp_removeUserFromAllGroups(struct usr_UserData *user){
+	for(int i = 0; i < MAX_GROUPS; i++){
+		struct clus_Cluster *g = &serverLists.groups[i];
 
-	pthread_mutex_lock(&group->mutex);
-	for(int i = 0; i < fig_Configuration.maxChannels; i++){
-		channel = &group->ident.channels[i];
-
-		pthread_mutex_lock(&channel->mutex);
-		if(!strncmp(channel->name, name, fig_Configuration.chanNameLength)){
-			pthread_mutex_unlock(&channel->mutex);
-			pthread_mutex_unlock(&group->mutex);
-			return channel;
-		}
-		pthread_mutex_unlock(&channel->mutex);
+		// No checks needed: if fail just keep going
+		clus_removeUser(g, user);
 	}
-	pthread_mutex_unlock(&group->mutex);
-
-	return NULL;
 }

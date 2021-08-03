@@ -43,7 +43,7 @@ void chan_removeUserFromAllChannels(struct usr_UserData *user, struct clus_Clust
 
 	pthread_mutex_lock(&g->mutex);
 	for(int i = 0; i < fig_Configuration.maxChannels; i++){
-		struct clus_Cluster *chan = &g->ident.channels[i];
+		struct clus_Cluster *chan = &g->channels[i];
 		clus_removeUser(chan, user);
 	}
 	pthread_mutex_unlock(&g->mutex);
@@ -61,7 +61,7 @@ struct clus_Cluster *chan_createChannel(char *name, struct clus_Cluster *group, 
 
     struct clus_Cluster *channel; // Find empty spot
 	for(int i = 0; i < fig_Configuration.maxChannels; i++){
-		channel = &group->ident.channels[i];
+		channel = &group->channels[i];
 
 		if(channel->id == -1){
 			break;
@@ -86,11 +86,13 @@ struct clus_Cluster *chan_createChannel(char *name, struct clus_Cluster *group, 
         return NULL;
 	}
 
-	channel->ident.group = group;
+	channel->group = group;
 
 	if(user != NULL){ // Add first user
 		clus_addUser(channel, user, 2);
 	}
+
+	channel->id = 1; // Load from memory later TODO
 
 	char buff[1024];
 	snprintf(buff, ARRAY_SIZE(buff), "Created new channel: %s", name);

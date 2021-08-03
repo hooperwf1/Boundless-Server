@@ -35,6 +35,7 @@ int init_commands() {
     cmd_addCommand("MODE", 2, 1, &cmd_mode);
     cmd_addCommand("PING", 0, 0, &cmd_ping);
     cmd_addCommand("PONG", 0, 0, &cmd_pong);
+    cmd_addCommand("QUIT", 0, 0, &cmd_quit);
 
     log_logMessage("Successfully initalized commands.", INFO);
     return 1;
@@ -157,9 +158,9 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 		int isUnreg = usr_userHasMode(user, 'r');
 
 		// Set the name in the user's buffer
-        pthread_mutex_lock(&user->userMutex);
+        pthread_mutex_lock(&user->mutex);
         strncpy(user->nickname, cmd->params[0], fig_Configuration.nickLen-1);
-        pthread_mutex_unlock(&user->userMutex);
+        pthread_mutex_unlock(&user->mutex);
 
         params[0] = cmd->params[0];
 		// User is already registered
@@ -275,7 +276,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 
 	// May only join channel if member of group above
 	if(cluster->type == TYPE_CHAN) { // Check if user is in group
-		if(clus_isInCluster(cluster->ident.group, user) == NULL){
+		if(clus_isInCluster(cluster->group, user) == NULL){
 			params[1] = ":Not on parent group!";
 			chat_createMessage(reply, user, thisServer, ERR_NOTONCHANNEL, params, 2);
 			return -1;
@@ -558,5 +559,20 @@ int cmd_ping(struct chat_Message *cmd, struct chat_Message *reply){
 
 // Response to PONG = do nothing
 int cmd_pong(UNUSED(struct chat_Message *cmd), UNUSED(struct chat_Message *reply)){
+	return 2;
+}
+
+// Used by either the server or the user to signal a user disconnect
+int cmd_quit(struct chat_Message *cmd, struct chat_Message *reply){
+    struct usr_UserData *user = cmd->user;
+	char *params[] = {cmd->params[0]};
+
+	char nick[fig_Configuration.nickLen];
+	usr_getNickname(nick, user);
+
+	chat_createMessage(reply, user, nick, "QUIT", params, 1);
+	usr_sendContactMessage(reply, user);
+	usr_deleteUser(user);
+
 	return 2;
 }

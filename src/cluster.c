@@ -37,6 +37,9 @@ struct clus_Cluster *clus_getCluster(char *name){
 struct clus_ClusterUser *clus_addUser(struct clus_Cluster *cluster, struct usr_UserData *user, int permLevel){
 	struct clus_ClusterUser *grpUser = NULL;
 
+	if(user->groupsJoined >= fig_Configuration.maxUserGroups)
+		return NULL;
+
 	// Already in group
 	grpUser = clus_isInCluster(cluster, user);
 	if(grpUser != NULL)
@@ -53,13 +56,16 @@ struct clus_ClusterUser *clus_addUser(struct clus_Cluster *cluster, struct usr_U
 	}
 	pthread_mutex_unlock(&cluster->mutex);
 
+	if(cluster->type == TYPE_GROUP && grpUser != NULL)
+		usr_addGroup(user, cluster);
+
 	return grpUser;
 }
 
 int clus_removeUser(struct clus_Cluster *c, struct usr_UserData *user){
     int ret = -1;
 
-	if(user == NULL || c == NULL)
+	if(user == NULL || c == NULL || c->id == -1)
 		return -1;
 
 	if(c->type == TYPE_GROUP)
@@ -75,6 +81,9 @@ int clus_removeUser(struct clus_Cluster *c, struct usr_UserData *user){
 		}
 	}
 	pthread_mutex_unlock(&c->mutex);
+
+	if(c->type == TYPE_GROUP && ret == 1)
+		usr_removeGroup(user, c);
     
     return ret;
 }
