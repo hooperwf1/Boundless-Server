@@ -43,6 +43,8 @@ int usr_getNickname(char *buff, struct usr_UserData *user){
 struct usr_UserData *usr_getUserByName(char *name){
     struct usr_UserData *user;
 
+	// Case insensitive
+	lowerString(name);
     for(int i = 0; i < serverLists.max; i++){
             user = &serverLists.users[i];
             pthread_mutex_lock(&user->mutex);
@@ -145,6 +147,7 @@ struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name)
 
 	// Do this last to ensure user isn't selected before it is ready to be used
     strncpy(user->nickname, name, fig_Configuration.nickLen);
+	lowerString(user->nickname);
 
     return user;
 }

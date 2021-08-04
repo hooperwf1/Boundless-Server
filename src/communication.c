@@ -1,19 +1,4 @@
-#include <stdio.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <netdb.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <pthread.h>
-#include <poll.h>
-#include <limits.h>
-#include <time.h>
 #include "communication.h"
-#include "logging.h"
-#include "config.h"
-#include "chat.h"
 
 struct com_SocketInfo serverSockAddr;
 pthread_t *threads;

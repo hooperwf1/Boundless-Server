@@ -5,8 +5,10 @@
 #include "channel.h"
 #include "chat.h"
 #include "user.h"
+#include "hstring.h"
 
 struct chan_Channel;
+struct usr_UserData;
 
 // Allocates an array of groups
 struct clus_Cluster *grp_createGroupArray(int size);

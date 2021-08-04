@@ -5,6 +5,7 @@
 #include "chat.h"
 #include "security.h"
 #include "group.h"
+#include "hstring.h"
 
 /*	CHANNEL NAME FORMAT:
 	&<groupname>/#<channelname>
@@ -13,9 +14,6 @@
 	it is assumed to be:
 	&General-Chat/#<channelname>
 */
-
-struct chat_Group;
-struct clus_Cluster;
 
 struct clus_Cluster *chan_createChannelArray(int size);
 

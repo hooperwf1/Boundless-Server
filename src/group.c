@@ -50,6 +50,9 @@ struct clus_Cluster *grp_getGroup(char *name){
 	if(ret == -1)
 		return NULL;
 
+	// Case insensitive
+	lowerString(name);
+
 	if(data[0][0] == '\0')
 		return &serverLists.groups[0];
 
@@ -73,6 +76,9 @@ struct clus_Cluster *grp_getGroup(char *name){
 struct clus_Cluster *grp_getChannel(struct clus_Cluster *group, char *name){
 	struct clus_Cluster *channel;
 
+	// Case insensitive
+	lowerString(name);
+
 	pthread_mutex_lock(&group->mutex);
 	for(int i = 0; i < fig_Configuration.maxChannels; i++){
 		channel = &group->channels[i];
@@ -92,9 +98,11 @@ struct clus_Cluster *grp_getChannel(struct clus_Cluster *group, char *name){
 
 // Adds a group to the main list, and creates a default channel
 struct clus_Cluster *grp_createGroup(char *name, struct usr_UserData *user, int maxUsers){
-	if(name[0] != '&'){
+	if(name[0] != '&')
 		return NULL;
-	}
+
+	if(clus_checkClusterName(name) == -1)
+		return NULL;
 
 	struct clus_Cluster *group = NULL;
 
@@ -116,8 +124,9 @@ struct clus_Cluster *grp_createGroup(char *name, struct usr_UserData *user, int 
 		return NULL;
 	}
 
-	// Set name
+	// All cluster names are case insensitive
 	strncpy(group->name, name, fig_Configuration.groupNameLength-1);
+	lowerString(group->name);
 
 	// Set Maximun users
 	group->max = maxUsers;

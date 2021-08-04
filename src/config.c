@@ -2,6 +2,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include "hstring.h"
 #include "config.h"
 #include "logging.h"
 
@@ -10,13 +11,14 @@ const char *options[] = {"port", "log", "enablelogging", "numiothreads",
 						"numdatathreads", "numclients", "nicklength", 
 						"servername", "channelnamelength", "groupnamelength", 
 						"timeout", "messagelimit", "maxchannels", "defaultgroup",
-						"maxusergroups"};
+						"maxusergroups", "welcomemessage"};
 
 // Struct to store all config data
 struct fig_ConfigData fig_Configuration = {
 	.logDirectory = "/var/log/boundless-server",
 	.serverName = "example.boundless.chat",
 	.defaultGroup = "&General-Chat",
+	.welcomeMessage = ":Welcome to the server!",
 	.useFile = 0,
 	.port = 6667,
 	.threadsIO = 1,
@@ -33,12 +35,6 @@ int init_config(char *dir){
     fig_readConfig(dir);
 
     return 1;
-}
-
-void fig_lowerString(char *str){
-	for(int i = 0; i < (int) strlen(str); i++){
-		str[i] = tolower(str[i]);
-	}
 }
 
 int fig_splitWords(char *line, char words[10][MAX_STRLEN]){
@@ -81,7 +77,7 @@ void fig_parseLine(char *line, int lineNo){
 	}
 
 	int option = -1;
-	fig_lowerString(words[0]);
+	lowerString(words[0]);
 	for(int i = 0; i < ARRAY_SIZE(options); i++){
 		if(!strncmp(words[0], options[i], MAX_STRLEN)){
 			option = i;
@@ -107,9 +103,16 @@ void fig_parseLine(char *line, int lineNo){
 			strncpy(fig_Configuration.defaultGroup, words[1], ARRAY_SIZE(fig_Configuration.defaultGroup));
 			break;
 
+		case 15:
+			//welcomeMessage
+			if(words[1][0] != ':') // Will include spaces
+				strncpy(fig_Configuration.welcomeMessage, ":", ARRAY_SIZE(fig_Configuration.welcomeMessage));
+			strncat(fig_Configuration.welcomeMessage, words[1], ARRAY_SIZE(fig_Configuration.welcomeMessage));
+			break;
+
 		case 2:
 			//enable logging
-			fig_lowerString(words[1]);
+			lowerString(words[1]);
 			if(!strncmp(words[1], "true", MAX_STRLEN)){
 				fig_Configuration.useFile = 1;
 			} else {

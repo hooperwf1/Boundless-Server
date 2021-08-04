@@ -3,6 +3,8 @@
 
 // Standard replies
 #define RPL_WELCOME "001"
+#define RPL_UNAWAY "305"
+#define RPL_NOWAWAY "306"
 #define RPL_NAMREPLY "353"
 #define RPL_ENDOFNAMES "366"
 

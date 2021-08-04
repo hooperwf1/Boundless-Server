@@ -12,6 +12,9 @@ int clus_getClusterName(struct clus_Cluster *cluster, char *buff, int size){
 struct clus_Cluster *clus_getCluster(char *name){
 	struct clus_Cluster *group;
 
+	// Case-insensitive
+	lowerString(name);
+
 	char data[2][1000] = {0};
 	int ret = chat_divideChanName(name, strlen(name), data);
 	if(ret == -1)
@@ -31,6 +34,21 @@ struct clus_Cluster *clus_getCluster(char *name){
 		return group;
 
 	return grp_getChannel(group, data[1]);
+}
+
+int clus_checkClusterName(char *name){
+	int len = strlen(name);
+
+	for(int i = 0; i < len; i++){
+		switch(name[i]){
+			case ' ':
+			case ',':
+			case 7:
+				return -1;
+		}
+	}
+
+	return 1;
 }
 
 // Add user to the group or channel

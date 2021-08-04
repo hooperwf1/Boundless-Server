@@ -16,6 +16,7 @@ struct fig_ConfigData {
 	char logDirectory[BUFSIZ];
 	char serverName[BUFSIZ];
 	char defaultGroup[BUFSIZ];
+	char welcomeMessage[BUFSIZ];
 	int useFile;
 	int port;
 	int threadsIO, threadsDATA;
@@ -29,8 +30,6 @@ struct fig_ConfigData {
 extern struct fig_ConfigData fig_Configuration;
 
 int init_config(char *dir);
-
-void fig_lowerString(char *str);
 
 //split a line into its individual words
 //return value is the number of words

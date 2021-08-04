@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "hstring.h"
 #include "logging.h"
 #include "config.h"
 #include "communication.h"

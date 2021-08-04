@@ -137,16 +137,13 @@ struct clus_Cluster *cmd_checkClusterPerms(struct chat_Message *msg, char *name,
 }
 
 // Changes a user's nickname
-const char *nick_usage = ":Usage: NICK <nickname>";
-const char *nick_welcome = ":Welcome to the server!";
-const char *nick_inUse = "Nickname already in use!";
 int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
     struct usr_UserData *user = cmd->user;
     char *params[ARRAY_SIZE(cmd->params)];
 
     // No nickname given
     if(cmd->params[0][0] == '\0'){
-		params[0] = (char *) nick_usage;
+		params[0] = ":Usage: NICK <nickname>";
         chat_createMessage(reply, user, thisServer, ERR_NONICKNAMEGIVEN, params, 1);
         return 1;
     }
@@ -166,19 +163,19 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 		// User is already registered
 		if(isUnreg != 1){
 			chat_createMessage(reply, user, oldName, "NICK", params, 1);
-			chat_sendServerMessage(reply); // TODO - change to all channels user is in + "contacts"
+			usr_sendContactMessage(reply, user);
 			return 1;
 		}
 
 		usr_changeUserMode(user, '-', 'r'); // They are now registered
-		params[1] = (char *) nick_welcome;
+		params[1] = fig_Configuration.welcomeMessage;
 		chat_createMessage(reply, user, thisServer, RPL_WELCOME, params, 2);
 		return 1;
 
     }
 
 	params[0] = cmd->params[0];
-	params[1] = (char *) nick_inUse;
+	params[1] = ":Nickname already in use";
 
 	chat_createMessage(reply, user, thisServer, ERR_NICKNAMEINUSE, params, 2);
 	return 1;
@@ -268,7 +265,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 		mode_setKey(cluster, cmd->params[1]);
 	}
 
-	// Cluster still unavaliable: FULL
+	// Cluster still unavaliable: FULL or invalid name
 	if(cluster == NULL){
 		chat_createMessage(reply, user, thisServer, ERR_CHANNELISFULL, params, 1);
 		return -1;

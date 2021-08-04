@@ -3,10 +3,14 @@
 
 #include "boundless.h"
 #include "chat.h"
+#include "communication.h"
 #include <time.h>
 #include <stdatomic.h>
 
 #define UNREGISTERED_NAME "unreg"
+
+struct com_QueueJob;
+struct chat_Message;
 
 // Data about an user
 // When a user is first loaded from save

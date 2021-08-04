@@ -1,11 +1,7 @@
-1. Config - DONE for now
-2. Socket connections
-3. handle communication
-	3.1 secure communication
-	3.2 heartbeat from connections
-    3.3 create user upon connection 
-4. Chat - check all functions for bugs
-    4.1 - Review all functions 
-5. Try to reduce memory footprint of chat_Message
-
-** Fix the standard string in logging.c and use BUFSIZ and ARRAY_SIZE() **
+1. Socket connections
+2. handle communication
+	2.1 secure communication
+3. Chat - check all functions for bugs
+    3.1 - Review all functions 
+4. Try to reduce memory footprint of chat_Message
+5. Review and replace strncpy to ensure NULL terminated strings

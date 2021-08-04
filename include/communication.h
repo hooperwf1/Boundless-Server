@@ -14,16 +14,9 @@
 #include <limits.h>
 #include <time.h>
 #include <stdatomic.h>
-#include "logging.h"
-#include "config.h"
-#include "linkedlist.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 #define MAX_MESSAGE_LENGTH 2048
-
-/* This header defines functions that handle all of the
- * Sending and receiving of data that the server will handle
- */
 
 // Jobs for queues
 struct com_QueueJob {
@@ -41,6 +34,17 @@ struct com_SocketInfo {
 	atomic_int socket2; // Used for filtering epoll writing events
     struct sockaddr_storage addr;
 };
+
+#include "hstring.h"
+#include "logging.h"
+#include "config.h"
+#include "linkedlist.h"
+#include "chat.h"
+#include "user.h"
+
+/* This header defines functions that handle all of the
+ * Sending and receiving of data that the server will handle
+ */
 
 extern int com_serverSocket;
 

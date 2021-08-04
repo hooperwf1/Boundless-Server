@@ -51,9 +51,11 @@ void chan_removeUserFromAllChannels(struct usr_UserData *user, struct clus_Clust
 
 // Create a channel with the specified name
 struct clus_Cluster *chan_createChannel(char *name, struct clus_Cluster *group, struct usr_UserData *user){
-    if(name[0] != '#'){
-        return NULL;
-    }
+    if(name[0] != '#')
+		return NULL;
+
+	if(clus_checkClusterName(name) == -1)
+		return NULL;
 
     // Add to the group
 	if(group == NULL)
@@ -74,8 +76,9 @@ struct clus_Cluster *chan_createChannel(char *name, struct clus_Cluster *group, 
 		return NULL; // Full
 	}
 
-    // TODO - make sure name is legal
+	// All cluster names are case insensitive
     strncpy(channel->name, name, fig_Configuration.chanNameLength-1);
+	lowerString(channel->name);
 
 	// Setup array of users with default size of 10
 	channel->max = 10;

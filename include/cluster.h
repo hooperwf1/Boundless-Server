@@ -35,6 +35,9 @@ int clus_getClusterName(struct clus_Cluster *cluster, char *buff, int size);
 // Returns the cluster based on its name
 struct clus_Cluster *clus_getCluster(char *name);
 
+// Makes sure a cluster's name is valid (no illegal characters allowed)
+int clus_checkClusterName(char *name);
+
 // Add a user to a cluster (channel or group)
 struct clus_ClusterUser *clus_addUser(struct clus_Cluster *cluster, struct usr_UserData *user, int permLevel);
 
