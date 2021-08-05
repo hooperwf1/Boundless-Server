@@ -48,6 +48,13 @@ struct clus_ClusterUser *clus_isInCluster(struct clus_Cluster *cluster, struct u
 // Returns the privs the user has for a channel
 int clus_getUserClusterPrivs(struct usr_UserData *user, struct clus_Cluster *cluster);
 
+// Give or remove cluster perms
+char *clus_giveClusterPerms(struct clus_Cluster *cluster, struct usr_UserData *user, char op, int perm);
+
+// Take a cluster mode and execute it
+// Index is used to help the command parser know which parameter to use
+char *clus_executeClusterMode(char op, char mode, struct clus_Cluster *cluster, char *data, int *index);
+
 int clus_sendClusterMessage(struct chat_Message *cmd, struct clus_Cluster *c);
 
 // Will fill a string with a list of users

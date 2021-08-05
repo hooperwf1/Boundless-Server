@@ -332,7 +332,8 @@ int chat_divideChanName(char *str, int size, char data[2][1000]){
 	}
 
 	// Normal, both
-	strhcpy(data[0], str, divide+1);
+	strhcpy(data[0], str, ARRAY_SIZE(data[0]));
+	data[0][divide] = '\0';
 	strhcpy(data[1], &str[divide+1], ARRAY_SIZE(data[1]));
 	return 1;
 }

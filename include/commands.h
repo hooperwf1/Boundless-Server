@@ -62,7 +62,7 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply);
 // Change modes for a user or channel
 int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply);
 int cmd_modeUser(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
-int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
+int cmd_modeCluster(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
 
 // Send back a PONG
 int cmd_ping(struct chat_Message *cmd, struct chat_Message *reply);

@@ -1,6 +1,6 @@
 #include "modes.h"
 
-char mode_groupModes[] = {'o', 's', 'i', 'b', 'm', 'k'};
+char mode_groupModes[] = {'o', 's', 'i', 'b', 'v', 'm', 'k'};
 char mode_chanModes[] = {'o', 's', 'i', 'b', 'v', 'm', 'k'};
 char mode_userModes[] = {'i', 'o', 'r', 'a'};
 

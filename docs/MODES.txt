@@ -20,5 +20,6 @@ o - Give or remove groupop
 s - secret group
 i - invite only
 b - bans
+v - groupvoice
 m - disallow members from creating new channels
 k - edit key

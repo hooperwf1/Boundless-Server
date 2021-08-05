@@ -268,7 +268,8 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 		}
 
 		// Add a key if specified
-		mode_setKey(cluster, cmd->params[1]);
+		if(cmd->params[1][0] != '\0')
+			mode_setKey(cluster, cmd->params[1]);
 	}
 
 	// Cluster still unavaliable: FULL or invalid name
@@ -467,11 +468,8 @@ int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply){
 	//Check whether mode is for channel or user
 	switch(type){
 		case TYPE_CHAN:
-			return cmd_modeChan(cmd, reply, op, hasOp);
-			
 		case TYPE_GROUP:
-			//return cmd_modeGroup(cmd, reply, op, hasOp);
-			return 2;
+			return cmd_modeCluster(cmd, reply, op, hasOp);
 	}
 
 	return cmd_modeUser(cmd, reply, op, hasOp);
@@ -507,10 +505,9 @@ int cmd_modeUser(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 }
 
 // Used by cmd_mode specifically for a channel
-// TODO - combine modeChan and modeGroup
-int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp){
+int cmd_modeCluster(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp){
     struct usr_UserData *user = cmd->user;
-	struct clus_Cluster *channel = NULL;
+	struct clus_Cluster *cluster = NULL;
     char *params[ARRAY_SIZE(cmd->params)];
 	char nickname[fig_Configuration.nickLen];
 	usr_getNickname(nickname, user);
@@ -518,10 +515,9 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 	// Default values
     params[0] = cmd->params[0];
 	params[1] = cmd->params[1];
-	params[2] = cmd->params[2];
 
-	channel = cmd_checkClusterPerms(reply, cmd->params[0], user, 2);
-	if(!channel){
+	cluster = cmd_checkClusterPerms(reply, cmd->params[0], user, 2);
+	if(!cluster){
 		return -1;
 	}
 
@@ -529,7 +525,8 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 	int index = 0;
 	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
 		params[2+index] = cmd->params[2+index]; // Fill in extra parameters
-		char *ret = chan_executeChanMode(op, cmd->params[1][i], channel, cmd->params[2+index], &index);		
+		char *ret = clus_executeClusterMode(op, cmd->params[1][i], cluster, cmd->params[2+index], &index);		
+
 		if(ret != NULL){
 			params[0] = nickname;
 			params[1] = params[2]; // Problematic value
@@ -538,8 +535,8 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 		}
 	}
 
-	chat_createMessage(reply, NULL, nickname, "MODE", params, 3+index);
-    clus_sendClusterMessage(reply, channel);
+	chat_createMessage(reply, NULL, nickname, "MODE", params, 2+index);
+    clus_sendClusterMessage(reply, cluster);
 	return 2;
 }
 

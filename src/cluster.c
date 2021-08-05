@@ -143,6 +143,61 @@ int clus_getUserClusterPrivs(struct usr_UserData *user, struct clus_Cluster *clu
 	return ret;
 }
 
+// Give or remove cluster perms
+char *clus_giveClusterPerms(struct clus_Cluster *cluster, struct usr_UserData *user, char op, int perm){
+	struct clus_ClusterUser *cUser = clus_isInCluster(cluster, user);
+	if(cUser == NULL){
+		return ERR_USERNOTINCHANNEL;
+	}
+
+    pthread_mutex_lock(&cluster->mutex);
+	if(cUser->user == user) { // Make sure it is actually the same user
+		if(op == '-'){
+			cUser->permLevel = 0;
+		} else {
+			cUser->permLevel = perm;
+		}
+	}
+    pthread_mutex_unlock(&cluster->mutex);
+
+	return NULL;
+}
+
+// Takes a cluster mode and executes it
+char *clus_executeClusterMode(char op, char mode, struct clus_Cluster *cluster, char *data, int *index){
+	int perm = 1;
+	struct usr_UserData *user;
+
+	if(cluster == NULL){
+		return ERR_NOSUCHCHANNEL;
+	}
+
+	*index += 1;
+	switch (mode) {
+		case 'o':
+			perm++;
+			goto change_clus_perm; // Fallthrough because 'v' and 'o' are only slightly different
+		case 'v':
+		change_clus_perm:
+			user = usr_getUserByName(data);
+			if(user == NULL){
+				return ERR_NOSUCHNICK;
+			}
+			return clus_giveClusterPerms(cluster, user, op, perm);	
+
+		case 'k':
+			if(op == '+')
+				return mode_setKey(cluster, data);
+			return mode_removeKey(cluster, data);
+		
+		default: // No special action needed, simply add it to the array
+			*index -= 1; // Undo addition (No data used)
+			mode_editArray(cluster, op, mode);
+	}
+
+	return NULL; // Successfull - no error message
+}
+
 int clus_sendClusterMessage(struct chat_Message *cmd, struct clus_Cluster *c){
 	struct usr_UserData *origin = cmd->user;
 
