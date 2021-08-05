@@ -35,7 +35,7 @@ void log_editConfig(int useFile, char* dir){
 	if(dir == NULL)
 		return;
 	if(strcmp(log_LoggingConfig.directory, dir) != 0){
-		strncpy(log_LoggingConfig.directory, dir, ARRAY_SIZE(log_LoggingConfig.directory)-1);
+		strhcpy(log_LoggingConfig.directory, dir, ARRAY_SIZE(log_LoggingConfig.directory));
 		log_LoggingConfig.directory[ARRAY_SIZE(log_LoggingConfig.directory)-1] = '\0';
 
 		char msg[BUFSIZ];
@@ -50,10 +50,9 @@ void log_editConfig(int useFile, char* dir){
 
 int log_openFile(){
     //get file location for this log
-    // XXX fix this strcpy to be strncpy
     char fileLoc[BUFSIZ];
     char endChar = log_LoggingConfig.directory[strlen(log_LoggingConfig.directory) - 1];
-    strcpy(fileLoc, log_LoggingConfig.directory);
+    strhcpy(fileLoc, log_LoggingConfig.directory, ARRAY_SIZE(fileLoc));
     if(endChar != '\\' || endChar != '/')
         strcat(fileLoc, "/");
 
@@ -120,10 +119,8 @@ int log_logToFile(char* msg, int type){
 }
 
 void log_printLogError(char* msg, int type){
-	char fullMsg[BUFSIZ] = {0};
-	strncpy(fullMsg, msg, ARRAY_SIZE(fullMsg)-1);
-	strncat(fullMsg, ": ", 3);
-	strncat(fullMsg, strerror(errno), ARRAY_SIZE(fullMsg)-strlen(fullMsg));
+	char fullMsg[BUFSIZ];
+	snprintf(fullMsg, ARRAY_SIZE(fullMsg), "%s: %s", msg, strerror(errno));
 	
 	log_printLogFormat(fullMsg, type);
 }
@@ -137,10 +134,9 @@ void log_printLogFormat(char *msg, int type){
 }	
 
 void log_createLogFormat(char* buffer, int size, char* msg, int type){
-	char time[22] = {0};
+	char time[22];
 	log_getTime(time);
 
-	char formattedType[16];
 	char* typeStr;
 	switch (type) {
 		case TRACE:
@@ -177,24 +173,17 @@ void log_createLogFormat(char* buffer, int size, char* msg, int type){
 
 	}
 	
-	snprintf(formattedType, size, " - [%s] - ", typeStr);
+	snprintf(buffer, size, "%s - [%s] - %s", time, typeStr, msg);
 
-	strncpy(buffer, time, size-1);
-	buffer[size-1] = '\0';
-	strncat(buffer, formattedType, size-strlen(buffer));
-	strncat(buffer, msg, size-strlen(buffer));
-
-        // Remove newline because printing will put one
-        if(buffer[strlen(buffer)-1] == '\n'){
-            buffer[strlen(buffer)-1] = '\0';
-        }
+	// Remove newline because printing will put one
+	if(buffer[strlen(buffer)-1] == '\n'){
+		buffer[strlen(buffer)-1] = '\0';
+	}
 }
 
 int log_logError(char* msg, int type){
-	char fullMsg[BUFSIZ] = {0};
-	strncpy(fullMsg, msg, ARRAY_SIZE(fullMsg)-1);
-	strncat(fullMsg, ": ", 3);
-	strncat(fullMsg, strerror(errno), ARRAY_SIZE(fullMsg)-strlen(fullMsg));
+	char fullMsg[BUFSIZ];
+	snprintf(fullMsg, ARRAY_SIZE(fullMsg), "%s: %s", msg, strerror(errno));
 
 	return log_logMessage(fullMsg, type);
 }

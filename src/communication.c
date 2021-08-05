@@ -188,7 +188,7 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 				loc = chat_findEndLine(buff, ARRAY_SIZE(buff), loc);
 				if(loc > -1)
 					buff[loc - 1] = '\0';
-				strncpy(line, &buff[oldLoc], ARRAY_SIZE(line)-1);
+				strhcpy(line, &buff[oldLoc], ARRAY_SIZE(line));
 				chat_insertQueue(user, 0, line, NULL);
 			}
 	}
@@ -216,7 +216,7 @@ int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
 		return -1;
 
 	char buff[ARRAY_SIZE(job->str)];
-	strncpy(buff, job->str, ARRAY_SIZE(buff));
+	strhcpy(buff, job->str, ARRAY_SIZE(buff));
 	free(job);
 
 	pthread_mutex_lock(&user->mutex);

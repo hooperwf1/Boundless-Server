@@ -90,24 +90,29 @@ void fig_parseLine(char *line, int lineNo){
 	switch (option) {
 		case 1:
 			//log
-			strncpy(fig_Configuration.logDirectory, words[1], ARRAY_SIZE(fig_Configuration.logDirectory));
+			strhcpy(fig_Configuration.logDirectory, words[1], ARRAY_SIZE(fig_Configuration.logDirectory));
 			break;
 
 		case 7:
 			//serverName
-			strncpy(fig_Configuration.serverName, words[1], ARRAY_SIZE(fig_Configuration.serverName));
+			strhcpy(fig_Configuration.serverName, words[1], ARRAY_SIZE(fig_Configuration.serverName));
 			break;
 
 		case 13:
 			//defaultGroup
-			strncpy(fig_Configuration.defaultGroup, words[1], ARRAY_SIZE(fig_Configuration.defaultGroup));
+			strhcpy(fig_Configuration.defaultGroup, words[1], ARRAY_SIZE(fig_Configuration.defaultGroup));
 			break;
 
 		case 15:
 			//welcomeMessage
+			char *dst = fig_Configuration.welcomeMessage;
 			if(words[1][0] != ':') // Will include spaces
-				strncpy(fig_Configuration.welcomeMessage, ":", ARRAY_SIZE(fig_Configuration.welcomeMessage));
-			strncat(fig_Configuration.welcomeMessage, words[1], ARRAY_SIZE(fig_Configuration.welcomeMessage));
+				dst = &dst[1]; // Already a colon included
+			int len = strhcpy(dst, &line[strlen("welcomemessage ")], ARRAY_SIZE(fig_Configuration.welcomeMessage)-1);
+			fig_Configuration.welcomeMessage[0] = ':';
+
+			if(dst[len-2] == '\n') // remove extraneous \n
+				dst[len-2] = '\0';
 			break;
 
 		case 2:

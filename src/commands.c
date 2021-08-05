@@ -49,7 +49,7 @@ int cmd_addCommand(char *word, int minParams, int permLevel, int (*func)(struct 
     }
 
     command->minParams = minParams;
-    strncpy(command->word, word, ARRAY_SIZE(command->word));	
+    strhcpy(command->word, word, ARRAY_SIZE(command->word));	
     command->func = func;
 	command->permLevel = permLevel;
 
@@ -102,7 +102,7 @@ int cmd_runCommand(struct chat_Message *cmd){
     if(ret == -2){
         memcpy(&reply, &cmd_unknownCommand, sizeof(reply));
         reply.user = cmd->user;
-        strncat(reply.params[0], cmd->command, 15);
+        strhcat(reply.params[0], cmd->command, ARRAY_SIZE(reply.params[0]));
     }
 
     if(ret != 2){ // 2 is a request that message is not sent
@@ -156,7 +156,7 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 
 		// Set the name in the user's buffer
         pthread_mutex_lock(&user->mutex);
-        strncpy(user->nickname, cmd->params[0], fig_Configuration.nickLen-1);
+        strhcpy(user->nickname, cmd->params[0], fig_Configuration.nickLen);
         pthread_mutex_unlock(&user->mutex);
 
         params[0] = cmd->params[0];
@@ -186,14 +186,14 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
     struct usr_UserData *user = cmd->user;
     struct usr_UserData *otherUser;
-    struct clus_Cluster *channel;
+    struct clus_Cluster *channel = NULL;
     char *params[ARRAY_SIZE(cmd->params)];
     int size = 1;
 
     // Sending to another user
     params[0] = cmd->params[0];
     size = 2;
-    if(cmd->params[0][0] != '#'){
+    if(cmd->params[0][0] != '#' && cmd->params[0][0] != '&'){
         otherUser = usr_getUserByName(cmd->params[0]);
         if(otherUser == NULL){
 			params[1] = ":Nick not found!";
@@ -204,6 +204,12 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
 		channel = cmd_checkClusterPerms(reply, cmd->params[0], user, 0);
         if(channel == NULL)
 			return -1;
+
+		if(channel->type != TYPE_CHAN){
+			params[1] = ":Cannot send PRIVMSG to groups!";
+            chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
+            return -1;
+		}
 
 		if(mode_arrayHasMode(channel, 'm') == 1 && clus_getUserClusterPrivs(user, channel) < 1){
 			chat_createMessage(reply, user, thisServer, ERR_CANNOTSENDTOCHAN, params, 1);
@@ -313,7 +319,7 @@ int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
 	char items[5][1001] = {0};
 
 	char buff[BUFSIZ];
-	strncpy(buff, cmd->params[0], ARRAY_SIZE(buff));
+	strhcpy(buff, cmd->params[0], ARRAY_SIZE(buff));
     
 	// Split up into array based on commas
 	int loc = 0, num = 0;
@@ -321,10 +327,9 @@ int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
 		int oldLoc = loc;
 		loc = chat_findCharacter(buff, strlen(cmd->params[0]), ',');
 		if(loc > -1){
-			buff[loc] = '\0'; // Aid to strncpy	
 			loc++; // Start at char after ','
 		}
-		strncpy(items[num], &buff[oldLoc], ARRAY_SIZE(items[0])-1);
+		strhcpy(items[num], &buff[oldLoc], ARRAY_SIZE(items[0]));
 
 		num++;
 	}

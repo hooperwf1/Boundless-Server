@@ -125,7 +125,7 @@ struct clus_Cluster *grp_createGroup(char *name, struct usr_UserData *user, int 
 	}
 
 	// All cluster names are case insensitive
-	strncpy(group->name, name, fig_Configuration.groupNameLength-1);
+	strhcpy(group->name, name, fig_Configuration.groupNameLength);
 	lowerString(group->name);
 
 	// Set Maximun users

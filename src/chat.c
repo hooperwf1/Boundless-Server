@@ -12,10 +12,6 @@ struct chat_ServerLists serverLists = {0};
 struct chat_DataQueue dataQueue = {0};
 
 int init_chat(){
-	// Compensate for null byte '\0'
-	fig_Configuration.nickLen++; 
-	fig_Configuration.groupNameLength++;
-	fig_Configuration.chanNameLength++;
 	serverLists.max = fig_Configuration.clients;
 
     // Allocate threads for processing user input 
@@ -86,7 +82,7 @@ int chat_insertQueue(struct usr_UserData *user, int type, char *str, struct chat
 	job->user = user;
 	job->msg = msg;
 	if(str != NULL)
-		strncpy(job->str, str, ARRAY_SIZE(job->str)-1);
+		strhcpy(job->str, str, ARRAY_SIZE(job->str));
 
     pthread_mutex_lock(&dataQueue.queueMutex); 
     link_add(&dataQueue.queue, job);
@@ -249,13 +245,14 @@ int chat_createMessage(struct chat_Message *msg, struct usr_UserData *user, char
 	msg->prefix[0] = '\0';
     if(prefix != NULL){ // Automatically insert a ':' infront
         msg->prefix[0] = ':';
-        strncpy(&msg->prefix[1], prefix, ARRAY_SIZE(msg->prefix)-1);
+        strhcpy(&msg->prefix[1], prefix, ARRAY_SIZE(msg->prefix));
     }
-    strncpy(msg->command, cmd, ARRAY_SIZE(msg->command));
+    strhcpy(msg->command, cmd, ARRAY_SIZE(msg->command));
 
     for (int i = 0; i < paramCount; i++){
-		if(params[i] != NULL)
-			strncpy(msg->params[i], params[i], ARRAY_SIZE(msg->params[i]));
+		if(params[i] != NULL){
+			strhcpy(msg->params[i], params[i], ARRAY_SIZE(msg->params[i]));
+		}
     }
 
     msg->paramCount = paramCount;
@@ -270,11 +267,9 @@ int chat_messageToString(struct chat_Message *msg, char *str, int sizeStr) {
 	    snprintf(str, sizeStr, "%s", msg->command);
 	}
     
-    int newLen = sizeStr - strlen(str);
-    for (int i = 0; i < msg->paramCount && newLen > 0; i++){
-            strncat(str, " ", newLen);
-            strncat(str, msg->params[i], newLen - 1);
-            newLen -= strlen(str);
+    for (int i = 0; i < msg->paramCount; i++){
+        strhcat(str, " ", sizeStr);
+        strhcat(str, msg->params[i], sizeStr);
     }
 
     return 1;
@@ -320,15 +315,15 @@ int chat_findCharacter(char *str, int size, char key){
 // Divide a string into groupname and channelname
 int chat_divideChanName(char *str, int size, char data[2][1000]){
 	if(str[0] == '#'){ // Only channel
-		strncpy(data[0], fig_Configuration.defaultGroup, ARRAY_SIZE(data[0]));
-		strncpy(data[1], str, ARRAY_SIZE(data[1]));
+		strhcpy(data[0], fig_Configuration.defaultGroup, ARRAY_SIZE(data[0]));
+		strhcpy(data[1], str, ARRAY_SIZE(data[1]));
 		return 1;
 	}
 
 	int divide = chat_findCharacter(str, size, '/');
 	if(divide == -1){ // Only group or neither
 		if(str[0] == '&'){
-			strncpy(data[0], str, ARRAY_SIZE(data[1]));
+			strhcpy(data[0], str, ARRAY_SIZE(data[1]));
 			data[1][0] = '\0';
 			return 1;
 		}
@@ -337,7 +332,7 @@ int chat_divideChanName(char *str, int size, char data[2][1000]){
 	}
 
 	// Normal, both
-	strncpy(data[0], str, divide);
-	strncpy(data[1], &str[divide+1], ARRAY_SIZE(data[1]));
+	strhcpy(data[0], str, divide+1);
+	strhcpy(data[1], &str[divide+1], ARRAY_SIZE(data[1]));
 	return 1;
 }

@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include "config.h"
+#include "hstring.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 #define TRACE	(0)

@@ -75,7 +75,7 @@ char *mode_setKey(struct clus_Cluster *c, char *key){
 		return ERR_KEYSET;
 
 	pthread_mutex_lock(&c->mutex);
-	strncpy(c->key, key, KEY_LEN-1);
+	strhcpy(c->key, key, KEY_LEN);
 	pthread_mutex_unlock(&c->mutex);
 
 	mode_editArray(c, '+', 'k');

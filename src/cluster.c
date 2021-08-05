@@ -3,7 +3,7 @@
 // Returns cluster's name safely
 int clus_getClusterName(struct clus_Cluster *cluster, char *buff, int size){
 	pthread_mutex_lock(&cluster->mutex);
-	strncpy(buff, cluster->name, size);
+	strhcpy(buff, cluster->name, size);
 	pthread_mutex_unlock(&cluster->mutex);
 
 	return 1;
@@ -43,6 +43,7 @@ int clus_checkClusterName(char *name){
 		switch(name[i]){
 			case ' ':
 			case ',':
+			case '/':
 			case 7:
 				return -1;
 		}
@@ -169,30 +170,25 @@ int clus_getUsersInCluster(struct clus_Cluster *c, char *buff, int size){
     char nickname[fig_Configuration.nickLen];
     int pos = 1;
 
-	strncpy(buff, ":", size);
+	strhcpy(buff, ":", size);
     pthread_mutex_lock(&c->mutex);
 	for(int i = 0; i < c->max; i++){
 		if(c->users[i].user != NULL){
 			switch(c->users[i].permLevel) {
 				case 2: // Channel operator
-					strncat(buff, "@", size - pos - 1);
+					strhcat(buff, "@", size);
 					pos++;
 					break;
 
 				case 1: // Channel voice
-					strncat(buff, "+", size - pos - 1);
+					strhcat(buff, "+", size);
 					pos++;
 					break;
 			}
 
 			usr_getNickname(nickname, c->users[i].user);
-			strncat(buff, nickname, size - pos - 1);
-			pos = strlen(buff);
-
-			// Space inbetween users
-			buff[pos] = ' ';
-			buff[pos + 1] = '\0';
-			pos++;
+			strhcat(buff, nickname, size);
+			strhcat(buff, " ", size);
 		}
     }
     pthread_mutex_unlock(&c->mutex);

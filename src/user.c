@@ -34,7 +34,7 @@ int usr_getNickname(char *buff, struct usr_UserData *user){
     }
 
     pthread_mutex_lock(&user->mutex);
-    strncpy(buff, user->nickname, fig_Configuration.nickLen);
+    strhcpy(buff, user->nickname, fig_Configuration.nickLen);
     pthread_mutex_unlock(&user->mutex);
 
     return 1;
@@ -146,7 +146,7 @@ struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name)
     user->id = usr_globalUserID++;
 
 	// Do this last to ensure user isn't selected before it is ready to be used
-    strncpy(user->nickname, name, fig_Configuration.nickLen);
+    strhcpy(user->nickname, name, fig_Configuration.nickLen);
 	lowerString(user->nickname);
 
     return user;

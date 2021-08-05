@@ -77,7 +77,7 @@ struct clus_Cluster *chan_createChannel(char *name, struct clus_Cluster *group, 
 	}
 
 	// All cluster names are case insensitive
-    strncpy(channel->name, name, fig_Configuration.chanNameLength-1);
+    strhcpy(channel->name, name, fig_Configuration.chanNameLength);
 	lowerString(channel->name);
 
 	// Setup array of users with default size of 10
