@@ -101,6 +101,7 @@ int clus_removeUser(struct clus_Cluster *c, struct usr_UserData *user){
 	}
 	pthread_mutex_unlock(&c->mutex);
 
+	// Remove from user's personal list
 	if(c->type == TYPE_GROUP && ret == 1)
 		usr_removeGroup(user, c);
     

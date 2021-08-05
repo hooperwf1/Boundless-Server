@@ -397,12 +397,14 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
     return 1;
 }
 
-// Force a user to leave a channel
+// Force a user to leave a cluster
 // TODO - add error checking
 int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply){
     struct usr_UserData *user = cmd->user, *otherUser;
     char *params[ARRAY_SIZE(cmd->params)];
 	int size = 2;
+    params[0] = cmd->params[0];
+	params[1] = cmd->params[1];
 
     struct clus_Cluster *cluster = cmd_checkClusterPerms(reply, cmd->params[0], user, 2);
     if(cluster == NULL){

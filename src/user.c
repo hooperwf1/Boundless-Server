@@ -216,7 +216,7 @@ void usr_removeGroup(struct usr_UserData *user, struct clus_Cluster *c){
 			break;
 		}
 	}
-	pthread_mutex_lock(&user->mutex);
+	pthread_mutex_unlock(&user->mutex);
 }
 
 // Searches for and kicks users that surpassed their message timeouts
