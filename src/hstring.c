@@ -27,3 +27,13 @@ size_t strhcat(char *dst, char *src, size_t size){
 	dst += n;
 	return strhcpy(dst, src, size-n);
 }
+
+// General character location
+int findCharacter(char *str, int size, char key){
+	for(int i = 0; i < size; i++){
+		if(str[i] == key)
+			return i;
+	}
+
+	return -1;
+}

@@ -11,7 +11,7 @@ const char *options[] = {"port", "log", "enablelogging", "numiothreads",
 						"numdatathreads", "numclients", "nicklength", 
 						"servername", "channelnamelength", "groupnamelength", 
 						"timeout", "messagelimit", "maxchannels", "defaultgroup",
-						"maxusergroups", "welcomemessage"};
+						"maxusergroups", "welcomemessage", "oper"};
 
 // Struct to store all config data
 struct fig_ConfigData fig_Configuration = {
@@ -19,6 +19,7 @@ struct fig_ConfigData fig_Configuration = {
 	.serverName = "example.boundless.chat",
 	.defaultGroup = "&General-Chat",
 	.welcomeMessage = ":Welcome to the server!",
+	.oper = {"oper", "password"},
 	.useFile = 0,
 	.port = 6667,
 	.threadsIO = 1,
@@ -113,6 +114,14 @@ void fig_parseLine(char *line, int lineNo){
 
 			if(dst[len-2] == '\n') // remove extraneous \n
 				dst[len-2] = '\0';
+			break;
+
+		case 16:
+			//oper
+			strhcpy(fig_Configuration.oper[0], words[1], ARRAY_SIZE(fig_Configuration.oper[0]));
+			strhcpy(fig_Configuration.oper[1], words[2], ARRAY_SIZE(fig_Configuration.oper[1]));
+			if(fig_Configuration.oper[1][0] == '\0')
+				log_logMessage("OPERATOR PASSWORD IS EMPTY", WARNING);
 			break;
 
 		case 2:

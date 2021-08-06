@@ -17,6 +17,7 @@ struct fig_ConfigData {
 	char serverName[BUFSIZ];
 	char defaultGroup[BUFSIZ];
 	char welcomeMessage[BUFSIZ];
+	char oper[2][BUFSIZ];
 	int useFile;
 	int port;
 	int threadsIO, threadsDATA;

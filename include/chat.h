@@ -83,9 +83,6 @@ int chat_findNextSpace(int starting, int size, char *str);
 // Returns the location of either \n or \r
 int chat_findEndLine(char *str, int size, int starting);
 
-// General character location
-int chat_findCharacter(char *str, int size, char key);
-
 // Divide a string into groupname and channelname
 int chat_divideChanName(char *str, int size, char data[2][1000]);
 

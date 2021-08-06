@@ -36,7 +36,8 @@ int init_commands() {
     cmd_addCommand("PING", 0, 0, &cmd_ping);
     cmd_addCommand("PONG", 0, 0, &cmd_pong);
     cmd_addCommand("QUIT", 0, 0, &cmd_quit);
-    cmd_addCommand("KILL", 2, 1, &cmd_kill);
+    cmd_addCommand("KILL", 2, 2, &cmd_kill);
+    cmd_addCommand("OPER", 2, 1, &cmd_oper);
 
     log_logMessage("Successfully initalized commands.", INFO);
     return 1;
@@ -254,7 +255,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	struct clus_Cluster *cluster = clus_getCluster(cmd->params[0]);
 	if(cluster == NULL) { //try to create it
 		// Only a group
-		if(chat_findCharacter(cmd->params[0], strlen(cmd->params[0]), '/') == -1 && cmd->params[0][0] == '&'){
+		if(findCharacter(cmd->params[0], strlen(cmd->params[0]), '/') == -1 && cmd->params[0][0] == '&'){
 			cluster = grp_createGroup(cmd->params[0], user, 100);
 
 		} else { // Channel
@@ -333,7 +334,7 @@ int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
 	int loc = 0, num = 0;
 	while(loc != -1 && num < ARRAY_SIZE(items)){
 		int oldLoc = loc;
-		loc = chat_findCharacter(buff, strlen(cmd->params[0]), ',');
+		loc = findCharacter(buff, strlen(cmd->params[0]), ',');
 		if(loc > -1){
 			loc++; // Start at char after ','
 		}
@@ -611,4 +612,30 @@ int cmd_kill(struct chat_Message *cmd, struct chat_Message *reply){
 	usr_deleteUser(otherUser);
 
 	return 2;
+}
+
+// Used to promote a user to an OPER
+int cmd_oper(struct chat_Message *cmd, struct chat_Message *reply){
+    struct usr_UserData *user = cmd->user;
+	char *params[] = {cmd->params[0], cmd->params[1]};
+
+	if(auth_checkOper(cmd->params[0], cmd->params[1]) == -1){
+		chat_createMessage(reply, user, thisServer, ERR_PASSWDMISMATCH, params, 1);
+		return -1;
+	}
+
+	// Successfully authenticated
+	usr_changeUserMode(user, '+', 'o');		
+
+	char nick[fig_Configuration.nickLen];
+	usr_getNickname(nick, user);
+
+	// Log it: prevent abuse
+	char buff[1024];
+	snprintf(buff, ARRAY_SIZE(buff), "%s OPER %s", nick, cmd->params[0]);
+	log_logMessage(buff, MESSAGE);
+
+	params[0] = ":Welcome operator";
+	chat_createMessage(reply, user, nick, RPL_YOUREOPER, params, 1);
+	return 1;
 }

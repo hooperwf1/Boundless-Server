@@ -7,6 +7,7 @@
 #include "numerics.h"
 #include "user.h"
 #include "channel.h"
+#include "auth.h"
 
 #define NUMERIC_SIZE 15
 #define UNUSED(x) x __attribute__((unused))
@@ -75,5 +76,8 @@ int cmd_quit(struct chat_Message *cmd, struct chat_Message *reply);
 
 // Used to forcefully remove a user
 int cmd_kill(struct chat_Message *cmd, struct chat_Message *reply);
+
+// Used to promote a user to an OPER
+int cmd_oper(struct chat_Message *cmd, struct chat_Message *reply);
 
 #endif

@@ -302,16 +302,6 @@ int chat_findEndLine(char *str, int size, int starting){
 	return -1;
 }
 
-// General character location
-int chat_findCharacter(char *str, int size, char key){
-	for(int i = 0; i < size; i++){
-		if(str[i] == key)
-			return i;
-	}
-
-	return -1;
-}
-
 // Divide a string into groupname and channelname
 int chat_divideChanName(char *str, int size, char data[2][1000]){
 	if(str[0] == '#'){ // Only channel
@@ -320,7 +310,7 @@ int chat_divideChanName(char *str, int size, char data[2][1000]){
 		return 1;
 	}
 
-	int divide = chat_findCharacter(str, size, '/');
+	int divide = findCharacter(str, size, '/');
 	if(divide == -1){ // Only group or neither
 		if(str[0] == '&'){
 			strhcpy(data[0], str, ARRAY_SIZE(data[1]));
