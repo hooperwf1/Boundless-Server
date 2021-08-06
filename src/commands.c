@@ -36,6 +36,7 @@ int init_commands() {
     cmd_addCommand("PING", 0, 0, &cmd_ping);
     cmd_addCommand("PONG", 0, 0, &cmd_pong);
     cmd_addCommand("QUIT", 0, 0, &cmd_quit);
+    cmd_addCommand("KILL", 2, 1, &cmd_kill);
 
     log_logMessage("Successfully initalized commands.", INFO);
     return 1;
@@ -82,6 +83,12 @@ int cmd_runCommand(struct chat_Message *cmd){
 			if(usr_userHasMode(cmd->user, 'r') == 1 && command->permLevel >= 1){
                 char *params[] = {":You have not registered: use NICK first"};
                 chat_createMessage(&reply, cmd->user, thisServer, ERR_NOTREGISTERED, params, 1);
+                break;
+			}
+
+			if(usr_userHasMode(cmd->user, 'o') == -1 && command->permLevel >= 2){
+                char *params[] = {":Insufficient Permissions"};
+                chat_createMessage(&reply, cmd->user, thisServer, ERR_NOPRIVILEGES, params, 1);
                 break;
 			}
 
@@ -574,6 +581,34 @@ int cmd_quit(struct chat_Message *cmd, struct chat_Message *reply){
 	chat_createMessage(reply, user, nick, "QUIT", params, 1);
 	usr_sendContactMessage(reply, user);
 	usr_deleteUser(user);
+
+	return 2;
+}
+
+// Used to forcefully remove a user
+int cmd_kill(struct chat_Message *cmd, struct chat_Message *reply){
+    struct usr_UserData *user = cmd->user, *otherUser;
+	char *params[] = {cmd->params[0], cmd->params[1]};
+
+	otherUser = usr_getUserByName(cmd->params[0]);
+	if(otherUser == NULL){
+		params[1] = ":Nick not found!";
+		chat_createMessage(reply, user, thisServer, ERR_NOSUCHNICK, params, 2);
+		return -1;
+	}
+
+	char nick[fig_Configuration.nickLen];
+	usr_getNickname(nick, user);
+
+	// Log it: prevent abuse
+	char buff[1024];
+	snprintf(buff, ARRAY_SIZE(buff), "%s KILLed %s", nick, cmd->params[0]);
+	log_logMessage(buff, MESSAGE);
+
+	chat_createMessage(reply, user, nick, "KILL", params, 2);
+	// Everybody sees it to prevent abuse
+	chat_sendServerMessage(reply); 
+	usr_deleteUser(otherUser);
 
 	return 2;
 }

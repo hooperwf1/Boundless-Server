@@ -68,6 +68,9 @@ void usr_changeUserMode(struct usr_UserData *user, char op, char mode);
 // Checks if a user has a mode active
 int usr_userHasMode(struct usr_UserData *user, char mode);
 
+// Generate a quit for a user
+void usr_generateQuit(struct usr_UserData *user, char *reason);
+
 /*	A contact is someone the user has contact with (channel, group, etc) but
 	only wants to send their message to them once (as opposed to mutliple
 	sendClusterMessage), even if they are in multiple

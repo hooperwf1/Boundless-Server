@@ -82,7 +82,7 @@ int com_sendStr(struct usr_UserData *user, char *msg){
 	ev.data.ptr = user;
 	if(epoll_ctl(com_epollfd, EPOLL_CTL_MOD, sock, &ev) == -1){
 		log_logError("Error rearming write socket", WARNING);
-		usr_deleteUser(user);
+		usr_generateQuit(user, ":Socket error");
 		return -1;
 	}
 
@@ -157,11 +157,11 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 	switch(bytes){
 		case 0:
 			log_logMessage("Client disconnect.", INFO);
-			goto disconnect_client; // Fallthrough minus the logging part
+			usr_generateQuit(user, ":Disconnect");
+			break;
 		case 1:
 			log_logError("Error reading from client.", WARNING);
-		disconnect_client:
-			usr_deleteUser(user);
+			usr_generateQuit(user, ":Socket error");
 			break;
 
 		default: ; 
@@ -174,7 +174,7 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 
 			if(timeDifference < (double) messageLimit){
 				log_logMessage("User sending messages too fast.", INFO);
-				usr_deleteUser(user);
+				usr_generateQuit(user, ":Sending messages too fast");
 				return -1;
 			}
 
@@ -232,7 +232,7 @@ int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
 	int ret = write(user->socketInfo.socket2, buff, strlen(buff));
 	if(ret == -1){
 		log_logError("Error writing to client", ERROR);
-		usr_deleteUser(user);
+		usr_generateQuit(user, ":Socket error");
 		return -1;
 	}
 	
@@ -241,7 +241,7 @@ int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
 	ev.data.ptr = user;
 	if(epoll_ctl(epollfd, EPOLL_CTL_MOD, user->socketInfo.socket2, &ev) == -1){
 		log_logError("Error rearming write socket", WARNING);
-		usr_deleteUser(user);
+		usr_generateQuit(user, ":Socket error");
 		return -1;
 	}
 	

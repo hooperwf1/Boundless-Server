@@ -235,7 +235,7 @@ int usr_timeOutUsers(int timeOut){
 			if(id != -1 && id != 0){ // Neither invalid nor SERVER
 				if(diff > timeOut){
 					log_logMessage("User timeout.", INFO);
-					usr_deleteUser(user);	
+					usr_generateQuit(user, ":Timed out");
 				} else if(pinged == -1 && diff > timeOut/2){ // Ping user
 					com_sendStr(user, "PING :Timeout imminent.");
 
@@ -292,6 +292,13 @@ int usr_userHasMode(struct usr_UserData *user, char mode){
 	pthread_mutex_unlock(&user->mutex);
 
 	return ret;
+}
+
+// Generate a quit for a user
+void usr_generateQuit(struct usr_UserData *user, char *reason){
+	char msg[MAX_MESSAGE_LENGTH];
+	snprintf(msg, ARRAY_SIZE(msg), "QUIT %s\n", reason);
+	chat_insertQueue(user, 0, msg, NULL);
 }
 
 int usr_sendContactMessage(struct chat_Message *msg, struct usr_UserData *user){
