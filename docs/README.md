@@ -7,6 +7,23 @@ Simply connect to either Boundless.Chat at port 6667 or another custom instance.
 
 ## Installation
 **Note:** This is currently untested for both MacOS and Windows.
+Make sure that you have installed OpenSSL
+
+Debian/Ubuntu:
+```sh
+apt install libssl-dev
+```
+
+Arch Linux (Normally installed by default):
+```sh
+pacman -S openssl
+```
+
+Fedora:
+```sh
+dnf install openssl
+```
+
 ```sh
 git clone https://github.com/hooperwf1/Boundless-Server.git
 cd Boundless.Chat-Server
