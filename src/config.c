@@ -10,9 +10,9 @@
 const char *options[] = {"port", "log", "enablelogging", "numiothreads", 
 						"numdatathreads", "numclients", "nicklength", 
 						"servername", "channelnamelength", "groupnamelength", 
-						"timeout", "messagelimit", "maxchannels", "defaultgroup",
+						"timeout", "floodinterval", "maxchannels", "defaultgroup",
 						"maxusergroups", "welcomemessage", "oper", "sslcert",
-						"sslkey", "sslpass"};
+						"sslkey", "sslpass", "floodNum"};
 
 // Struct to store all config data
 struct fig_ConfigData fig_Configuration = {
@@ -30,7 +30,9 @@ struct fig_ConfigData fig_Configuration = {
 	.chanNameLength = 50,
 	.groupNameLength = 50,
 	.maxChannels = 100,
-	.maxUserGroups = 10
+	.maxUserGroups = 10,
+	.floodInterval = 10,
+	.floodNum = 5
 };
 
 int init_config(char *dir){
@@ -191,12 +193,17 @@ void fig_parseLine(char *line, int lineNo){
 			goto edit_int;
 
 		case 11:
-			//messageLimit
-			val = &fig_Configuration.messageLimit;
+			//floodInterval
+			val = &fig_Configuration.floodInterval;
+			goto edit_int;
+
+		case 20:
+			//floodNum
+			val = &fig_Configuration.floodNum;
 			goto edit_int;
 
 		case 12:
-			//messageLimit
+			//maxChannels
 			val = &fig_Configuration.maxChannels;
 			goto edit_int;
 

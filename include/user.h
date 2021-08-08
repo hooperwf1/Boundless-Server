@@ -26,9 +26,11 @@ struct usr_UserData {
 	atomic_int groupsJoined;
 	struct clus_Cluster **groups;
 
-	time_t lastMsg; // Keep track of time, too fast = kick, too slow = kick
-	atomic_int pinged; // Send only one ping to prevent spam from server
+	// Keep track of time, too fast = kick, too slow = kick
+	time_t lastMsg; 
+	atomic_int req, timeElapsed;
 
+	atomic_int pinged; // Send only one ping to prevent spam from server
 	pthread_mutex_t mutex;
 };
 
@@ -67,6 +69,8 @@ void usr_changeUserMode(struct usr_UserData *user, char op, char mode);
 
 // Checks if a user has a mode active
 int usr_userHasMode(struct usr_UserData *user, char mode);
+
+int usr_handleFlooding(struct usr_UserData *user);
 
 // Generate a quit for a user
 void usr_generateQuit(struct usr_UserData *user, char *reason);

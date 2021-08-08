@@ -8,8 +8,6 @@ struct usr_UserData *serverUser;
 
 SSL_CTX *com_ctx;
 
-int timeOut, messageLimit;
-
 extern struct chat_ServerLists serverLists;
 
 int init_server(){
@@ -50,9 +48,6 @@ int init_server(){
 		log_logError("Error adding listening socket to epoll", FATAL);
 		return -1;
 	}
-    
-	timeOut = fig_Configuration.timeOut;
-	messageLimit = fig_Configuration.messageLimit;
 
     //Setup threads for listening
     com_numThreads = com_setupIOThreads(&fig_Configuration);
@@ -151,7 +146,14 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 	int sockfd = user->socketInfo.socket;
 		
 	char buff[MAX_MESSAGE_LENGTH+1] = {0};
-	int bytes = read(sockfd, buff, ARRAY_SIZE(buff)-1);
+	int bytes;
+
+	// Read with or without SSL
+	if(user->socketInfo.useSSL == 1){
+		bytes = SSL_read(user->socketInfo.ssl, buff, ARRAY_SIZE(buff)-1);
+	} else {
+		bytes = read(sockfd, buff, ARRAY_SIZE(buff)-1);
+	}
 
 	switch(bytes){
 		case 0:
@@ -172,18 +174,11 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 				return -1;
 			}
 
-			// Check time inbetween messages (too fast == quit)
-			pthread_mutex_lock(&user->mutex);
-			double timeDifference = difftime(time(NULL), user->lastMsg);
-			user->lastMsg = time(NULL);
 			user->pinged = -1; // Reset ping
-			pthread_mutex_unlock(&user->mutex);
 
-			if(timeDifference < (double) messageLimit){
-				log_logMessage("User sending messages too fast.", INFO);
-				usr_generateQuit(user, ":Sending messages too fast");
+			// Make sure that the user isn't flooding the server
+			if(usr_handleFlooding(user) == 1)
 				return -1;
-			}
 
 			// Split up each line into its own job
 			int loc = 0;
@@ -236,7 +231,12 @@ int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
 		return -1;
 
 	log_logMessage(buff, MESSAGE);
-	int ret = write(user->socketInfo.socket2, buff, strlen(buff));
+	int ret;
+	if(user->socketInfo.useSSL == 1){
+		ret = SSL_write(user->socketInfo.ssl, buff, strlen(buff));
+	} else {
+		ret = write(user->socketInfo.socket2, buff, strlen(buff));
+	}
 	if(ret == -1){
 		log_logError("Error writing to client", ERROR);
 		usr_generateQuit(user, ":Socket error");
@@ -347,7 +347,6 @@ int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock, SSL_CTX 
 		log_logMessage("Error initialzing SSL for client", ERROR);
 		return -1;
 	}
-	printf("%p\n", ctx);
 
 	char ipstr[INET6_ADDRSTRLEN];
 	if(!getHost(ipstr, cliAddr, serverSock->addr.ss_family)){

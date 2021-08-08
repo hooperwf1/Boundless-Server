@@ -294,6 +294,31 @@ int usr_userHasMode(struct usr_UserData *user, char mode){
 	return ret;
 }
 
+int usr_handleFlooding(struct usr_UserData *user){
+	// Check time inbetween messages (too fast = quit)
+	pthread_mutex_lock(&user->mutex);
+	double timeDifference = difftime(time(NULL), user->lastMsg);
+	user->lastMsg = time(NULL);
+
+	// If past the flood interval, rest counters
+	user->timeElapsed += (atomic_int) timeDifference;
+	if(user->timeElapsed > fig_Configuration.floodInterval){
+		user->timeElapsed = 0;
+		user->req = 0;
+	}
+
+	user->req++;
+	pthread_mutex_unlock(&user->mutex);
+
+	if(user->req > fig_Configuration.floodNum){
+		log_logMessage("User sending messages too fast.", INFO);
+		usr_generateQuit(user, ":Sending messages too fast");
+		return 1;
+	}
+
+	return -1;
+}
+
 // Generate a quit for a user
 void usr_generateQuit(struct usr_UserData *user, char *reason){
 	char msg[MAX_MESSAGE_LENGTH];

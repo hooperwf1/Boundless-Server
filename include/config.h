@@ -26,7 +26,7 @@ struct fig_ConfigData {
 	int threadsIO, threadsDATA;
 	int clients;
 	int nickLen, chanNameLength, groupNameLength;
-	int timeOut, messageLimit;
+	int timeOut, floodInterval, floodNum;
 	int maxChannels, maxUserGroups;
 };	
 
