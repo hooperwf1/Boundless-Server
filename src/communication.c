@@ -6,11 +6,18 @@ int com_serverSocket = -1, com_epollfd = -1;
 int com_numThreads = -1;
 struct usr_UserData *serverUser;
 
+SSL_CTX *com_ctx;
+
 int timeOut, messageLimit;
 
 extern struct chat_ServerLists serverLists;
 
 int init_server(){
+	init_ssl(); 
+	com_ctx = ssl_getCtx(fig_Configuration.sslCert, fig_Configuration.sslKey, fig_Configuration.sslPass);
+	if(com_ctx == NULL)
+		return -1;
+
     // Initalize the server socket
     com_serverSocket = com_startServerSocket(&fig_Configuration, &serverSockAddr, 0);
     if(com_serverSocket < 0){
@@ -146,14 +153,6 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 	char buff[MAX_MESSAGE_LENGTH+1] = {0};
 	int bytes = read(sockfd, buff, ARRAY_SIZE(buff)-1);
 
-	// Rearm the fd because data has already been read
-	struct epoll_event ev = {.events = EPOLLIN|EPOLLONESHOT, .data.ptr = user};
-	if(epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &ev) == -1){
-		close(sockfd); // TODO delete user
-		log_logError("Error rearming socket", ERROR);
-		return -1;
-	}
-
 	switch(bytes){
 		case 0:
 			log_logMessage("Client disconnect.", INFO);
@@ -165,6 +164,14 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 			break;
 
 		default: ; 
+			// Rearm the fd because data has already been read
+			struct epoll_event ev = {.events = EPOLLIN|EPOLLONESHOT, .data.ptr = user};
+			if(epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &ev) == -1){
+				usr_generateQuit(user, ":Socket error");
+				log_logError("Error rearming socket", ERROR);
+				return -1;
+			}
+
 			// Check time inbetween messages (too fast == quit)
 			pthread_mutex_lock(&user->mutex);
 			double timeDifference = difftime(time(NULL), user->lastMsg);
@@ -269,7 +276,7 @@ void *com_communicateWithClients(void *param){
 		for(int i = 0; i < num; i++){
 			user = events[i].data.ptr;
 			if(user == serverUser){
-				com_acceptClient(&serverSockAddr, *epollfd);
+				com_acceptClient(&serverSockAddr, *epollfd, com_ctx);
 				continue;
 			}
 
@@ -309,7 +316,7 @@ int com_setupIOThreads(struct fig_ConfigData *config){
     return numThreads;
 }
 
-int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock){
+int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock, SSL_CTX *ctx){
 	char buff[BUFSIZ];
 
 	struct sockaddr_storage cliAddr;
@@ -332,6 +339,16 @@ int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock){
 		return -1;
 	}
 
+	SSL *ssl;
+	ssl = SSL_new(ctx);
+	SSL_set_fd(ssl, client);
+	if(SSL_accept(ssl) != 1){
+		close(client);
+		log_logMessage("Error initialzing SSL for client", ERROR);
+		return -1;
+	}
+	printf("%p\n", ctx);
+
 	char ipstr[INET6_ADDRSTRLEN];
 	if(!getHost(ipstr, cliAddr, serverSock->addr.ss_family)){
 		snprintf(buff, ARRAY_SIZE(buff), "New connection from: %s", ipstr);
@@ -346,6 +363,8 @@ int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock){
 		log_logError("Error creating 2nd fd for client", WARNING);
 		return -1;
 	}
+	newCli.useSSL = 1;
+	newCli.ssl = ssl;
 
 	if(chat_serverIsFull() == 1){
 		snprintf(buff, ARRAY_SIZE(buff), "Server is full, try again later.");

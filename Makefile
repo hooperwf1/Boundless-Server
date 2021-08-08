@@ -2,9 +2,9 @@ IDIR = include
 SDIR = src
 ODIR = obj
 CC=gcc
-CFLAGS=-I$(IDIR) -lpthread -Wall -Werror -Wextra -g -Wno-format-truncation
+CFLAGS=-I$(IDIR) -lpthread -Wall -Werror -Wextra -g -Wno-format-truncation -lssl -lcrypto
 
-_OBJS=boundless.o chat.o communication.o config.o linkedlist.o logging.o commands.o user.o channel.o security.o events.o group.o modes.o cluster.o hstring.o auth.o
+_OBJS=boundless.o chat.o communication.o config.o linkedlist.o logging.o commands.o user.o channel.o security.o events.o group.o modes.o cluster.o hstring.o auth.o ssl.o
 OBJS=$(patsubst %,$(ODIR)/%,$(_OBJS))
 
 $(ODIR)/%.o: $(SDIR)/%.c $(IDIR)/%.h

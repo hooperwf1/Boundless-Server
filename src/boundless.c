@@ -9,6 +9,7 @@
 #include "linkedlist.h"
 #include "chat.h"
 #include "commands.h"
+#include "ssl.h"
 
 void cleanUpServer(){
 	log_logMessage("Server is now quitting.", INFO);

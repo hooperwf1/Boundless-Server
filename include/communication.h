@@ -14,6 +14,10 @@
 #include <limits.h>
 #include <time.h>
 #include <stdatomic.h>
+#include <openssl/err.h>
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+#include "ssl.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 #define MAX_MESSAGE_LENGTH 2048
@@ -32,6 +36,8 @@ struct com_QueueJob {
 struct com_SocketInfo {
     atomic_int socket;
 	atomic_int socket2; // Used for filtering epoll writing events
+	atomic_int useSSL;
+	SSL *ssl;
     struct sockaddr_storage addr;
 };
 
@@ -77,7 +83,7 @@ void *com_communicateWithClients(void *param);
 int com_setupIOThreads(struct fig_ConfigData *config);
 
 //accept communication with clients
-int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock);
+int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock, SSL_CTX *ctx);
 
 //start server socket based on configuration
 int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* sockAddr, int forceIPv4);

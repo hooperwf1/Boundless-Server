@@ -18,6 +18,9 @@ struct fig_ConfigData {
 	char defaultGroup[BUFSIZ];
 	char welcomeMessage[BUFSIZ];
 	char oper[2][BUFSIZ];
+	char sslCert[BUFSIZ];
+	char sslKey[BUFSIZ];
+	char sslPass[BUFSIZ];
 	int useFile;
 	int port;
 	int threadsIO, threadsDATA;

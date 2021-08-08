@@ -11,7 +11,8 @@ const char *options[] = {"port", "log", "enablelogging", "numiothreads",
 						"numdatathreads", "numclients", "nicklength", 
 						"servername", "channelnamelength", "groupnamelength", 
 						"timeout", "messagelimit", "maxchannels", "defaultgroup",
-						"maxusergroups", "welcomemessage", "oper"};
+						"maxusergroups", "welcomemessage", "oper", "sslcert",
+						"sslkey", "sslpass"};
 
 // Struct to store all config data
 struct fig_ConfigData fig_Configuration = {
@@ -104,7 +105,22 @@ void fig_parseLine(char *line, int lineNo){
 			strhcpy(fig_Configuration.defaultGroup, words[1], ARRAY_SIZE(fig_Configuration.defaultGroup));
 			break;
 
-		case 15:
+		case 17:
+			//sslcert
+			strhcpy(fig_Configuration.sslCert, words[1], ARRAY_SIZE(fig_Configuration.sslCert));
+			break;
+
+		case 18:
+			//sslkey
+			strhcpy(fig_Configuration.sslKey, words[1], ARRAY_SIZE(fig_Configuration.sslKey));
+			break;
+
+		case 19:
+			//sslPass
+			strhcpy(fig_Configuration.sslPass, words[1], ARRAY_SIZE(fig_Configuration.sslPass));
+			break;
+
+		case 15: ;
 			//welcomeMessage
 			char *dst = fig_Configuration.welcomeMessage;
 			if(words[1][0] != ':') // Will include spaces
