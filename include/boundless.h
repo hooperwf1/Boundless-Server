@@ -3,6 +3,7 @@
 
 #define NUM_MODES 15
 #define KEY_LEN 20
+#define CONFIG_FILE "/etc/boundless-server/settings.conf"
 
 #include <stdio.h>
 #include <stdint.h>
