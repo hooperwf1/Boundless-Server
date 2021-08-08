@@ -12,7 +12,7 @@ const char *options[] = {"port", "log", "enablelogging", "numiothreads",
 						"servername", "channelnamelength", "groupnamelength", 
 						"timeout", "floodinterval", "maxchannels", "defaultgroup",
 						"maxusergroups", "welcomemessage", "oper", "sslcert",
-						"sslkey", "sslpass", "floodNum"};
+						"sslkey", "sslpass", "floodNum", "usessl", "forcessl"};
 
 // Struct to store all config data
 struct fig_ConfigData fig_Configuration = {
@@ -25,6 +25,8 @@ struct fig_ConfigData fig_Configuration = {
 	.port = 6667,
 	.threadsIO = 1,
 	.threadsDATA = 1,
+	.useSSL = 1,
+	.forceSSL = 1,
 	.clients = 20,
 	.nickLen = 10,
 	.chanNameLength = 50,
@@ -144,12 +146,17 @@ void fig_parseLine(char *line, int lineNo){
 
 		case 2:
 			//enable logging
-			lowerString(words[1]);
-			if(!strncmp(words[1], "true", MAX_STRLEN)){
-				fig_Configuration.useFile = 1;
-			} else {
-				fig_Configuration.useFile = 0;
-			}
+			fig_Configuration.useFile = fig_boolToInt(words[1]);
+			break;
+
+		case 21:
+			//enable ssl
+			fig_Configuration.useSSL = fig_boolToInt(words[1]);
+			break;
+
+		case 22:
+			//force ssl
+			fig_Configuration.forceSSL = fig_boolToInt(words[1]);
 			break;
 
 		case 3:
@@ -238,6 +245,16 @@ int fig_readConfig(char *path){
 
 	fclose(file);
 	return 0;
+}
+
+int fig_boolToInt(char *str){
+	int num = 0;
+	lowerString(str);
+	if(!strncmp(str, "true", MAX_STRLEN)){
+		num = 1;
+	}
+	
+	return num;
 }
 
 // Will edit the given config int value based on the given value and determine if is valid

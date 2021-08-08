@@ -21,7 +21,7 @@ struct fig_ConfigData {
 	char sslCert[BUFSIZ];
 	char sslKey[BUFSIZ];
 	char sslPass[BUFSIZ];
-	int useFile;
+	int useFile, useSSL, forceSSL;
 	int port;
 	int threadsIO, threadsDATA;
 	int clients;
@@ -44,6 +44,8 @@ void fig_parseLine(char *line, int lineNo);
 
 //read a configuration file into the fig_ConfigData struct
 int fig_readConfig(char *path);
+
+int fig_boolToInt(char *str);
 
 //make sure all config values are valid, if not set them to default
 int fig_editConfigInt(int *orig, char *str, int lineNo);

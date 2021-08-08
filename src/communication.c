@@ -11,10 +11,12 @@ SSL_CTX *com_ctx;
 extern struct chat_ServerLists serverLists;
 
 int init_server(){
-	init_ssl(); 
-	com_ctx = ssl_getCtx(fig_Configuration.sslCert, fig_Configuration.sslKey, fig_Configuration.sslPass);
-	if(com_ctx == NULL)
-		return -1;
+	if(fig_Configuration.useSSL == 1){
+		init_ssl(); 
+		com_ctx = ssl_getCtx(fig_Configuration.sslCert, fig_Configuration.sslKey, fig_Configuration.sslPass);
+		if(com_ctx == NULL)
+			return -1;
+	}
 
     // Initalize the server socket
     com_serverSocket = com_startServerSocket(&fig_Configuration, &serverSockAddr, 0);
@@ -339,13 +341,18 @@ int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock, SSL_CTX 
 		return -1;
 	}
 
-	SSL *ssl;
-	ssl = SSL_new(ctx);
-	SSL_set_fd(ssl, client);
-	if(SSL_accept(ssl) != 1){
-		close(client);
-		log_logMessage("Error initialzing SSL for client", ERROR);
-		return -1;
+	// Enable SSL
+	if(fig_Configuration.forceSSL == 1){
+		SSL *ssl;
+		ssl = SSL_new(ctx);
+		SSL_set_fd(ssl, client);
+		if(SSL_accept(ssl) != 1){
+			close(client);
+			log_logMessage("Error initialzing SSL for client", ERROR);
+			return -1;
+		}
+		newCli.useSSL = 1;
+		newCli.ssl = ssl;
 	}
 
 	char ipstr[INET6_ADDRSTRLEN];
@@ -362,8 +369,6 @@ int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock, SSL_CTX 
 		log_logError("Error creating 2nd fd for client", WARNING);
 		return -1;
 	}
-	newCli.useSSL = 1;
-	newCli.ssl = ssl;
 
 	if(chat_serverIsFull() == 1){
 		snprintf(buff, ARRAY_SIZE(buff), "Server is full, try again later.");
