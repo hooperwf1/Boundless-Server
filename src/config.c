@@ -12,7 +12,7 @@ const char *options[] = {"port", "log", "enablelogging", "numiothreads",
 						"servername", "channelnamelength", "groupnamelength", 
 						"timeout", "floodinterval", "maxchannels", "defaultgroup",
 						"maxusergroups", "welcomemessage", "oper", "sslcert",
-						"sslkey", "sslpass", "floodNum", "usessl", "forcessl"};
+						"sslkey", "sslpass", "floodNum", "sslport"};
 
 // Struct to store all config data
 struct fig_ConfigData fig_Configuration = {
@@ -22,11 +22,10 @@ struct fig_ConfigData fig_Configuration = {
 	.welcomeMessage = ":Welcome to the server!",
 	.oper = {"oper", "password"},
 	.useFile = 0,
-	.port = 6667,
+	.port = {0},
+	.sslPort = {0},
 	.threadsIO = 1,
 	.threadsDATA = 1,
-	.useSSL = 1,
-	.forceSSL = 1,
 	.clients = 20,
 	.nickLen = 10,
 	.chanNameLength = 50,
@@ -38,6 +37,7 @@ struct fig_ConfigData fig_Configuration = {
 };
 
 int init_config(char *dir){
+	fig_Configuration.port[0] = 6667;
     fig_readConfig(dir);
 
     return 1;
@@ -74,6 +74,7 @@ int fig_splitWords(char *line, char words[10][MAX_STRLEN]){
 	return word;
 }
 
+// TODO space separation for ports
 void fig_parseLine(char *line, int lineNo){
 	char words[10][MAX_STRLEN];		
 	int numWords = fig_splitWords(line, words);
@@ -149,14 +150,26 @@ void fig_parseLine(char *line, int lineNo){
 			fig_Configuration.useFile = fig_boolToInt(words[1]);
 			break;
 
-		case 21:
-			//enable ssl
-			fig_Configuration.useSSL = fig_boolToInt(words[1]);
+		case 0:
+			//port
+			fig_Configuration.numPorts = 0;
+			for(int i = 1; i < numWords; i++){
+				val = &fig_Configuration.port[fig_Configuration.numPorts];
+				fig_Configuration.numPorts++;
+				fig_editConfigInt(val, words[i], lineNo);	
+			}
+
 			break;
 
-		case 22:
-			//force ssl
-			fig_Configuration.forceSSL = fig_boolToInt(words[1]);
+		case 21:
+			//sslPort
+			fig_Configuration.numSSLPorts = 0;
+			for(int i = 1; i < numWords; i++){
+				val = &fig_Configuration.sslPort[fig_Configuration.numSSLPorts];
+				fig_Configuration.numSSLPorts++;
+				fig_editConfigInt(val, words[i], lineNo);	
+			}
+
 			break;
 
 		case 3:
@@ -167,11 +180,6 @@ void fig_parseLine(char *line, int lineNo){
 		case 4:
 			//num data threads
 			val = &fig_Configuration.threadsDATA;
-			goto edit_int;
-
-		case 0:
-			//port
-			val = &fig_Configuration.port;
 			goto edit_int;
 
 		case 5:

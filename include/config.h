@@ -21,8 +21,11 @@ struct fig_ConfigData {
 	char sslCert[BUFSIZ];
 	char sslKey[BUFSIZ];
 	char sslPass[BUFSIZ];
-	int useFile, useSSL, forceSSL;
-	int port;
+
+	int port[10], sslPort[10];
+	int numPorts, numSSLPorts;
+		
+	int useFile;
 	int threadsIO, threadsDATA;
 	int clients;
 	int nickLen, chanNameLength, groupNameLength;

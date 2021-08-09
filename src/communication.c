@@ -1,32 +1,20 @@
 #include "communication.h"
 
-struct com_SocketInfo serverSockAddr;
+struct link_List serverUsers;
 pthread_t *threads;
-int com_serverSocket = -1, com_epollfd = -1;
+int com_epollfd = -1;
 int com_numThreads = -1;
-struct usr_UserData *serverUser;
 
 SSL_CTX *com_ctx;
 
 extern struct chat_ServerLists serverLists;
 
 int init_server(){
-	if(fig_Configuration.useSSL == 1){
-		init_ssl(); 
-		com_ctx = ssl_getCtx(fig_Configuration.sslCert, fig_Configuration.sslKey, fig_Configuration.sslPass);
-		if(com_ctx == NULL)
-			return -1;
-	}
-
-    // Initalize the server socket
-    com_serverSocket = com_startServerSocket(&fig_Configuration, &serverSockAddr, 0);
-    if(com_serverSocket < 0){
-        log_logMessage("Retrying with IPv4...", INFO);
-        com_serverSocket = com_startServerSocket(&fig_Configuration, &serverSockAddr, 1);
-        if(com_serverSocket < 0){
-                return -1;
-        }
-    }
+	init_ssl(); 
+	com_ctx = ssl_getCtx(fig_Configuration.sslCert, fig_Configuration.sslKey, fig_Configuration.sslPass);
+	if(com_ctx == NULL)
+		return -1;
+	log_logMessage("Started SSL", INFO);	
 
 	// Create the epoll
 	com_epollfd = epoll_create1(0);
@@ -35,20 +23,54 @@ int init_server(){
 		return -1;
 	}
 
-	// TODO deal with random users sending data to this user
-	serverUser = usr_createUser(&serverSockAddr, fig_Configuration.serverName);
-	if(!serverUser){
-		log_logMessage("Unable to create the SERVER user", ERROR);
+	// Init all specified ports
+	int size = fig_Configuration.numPorts + fig_Configuration.numSSLPorts;
+	if(size < 1){
+		log_logMessage("No ports specified", ERROR);
 		return -1;
 	}
 
-	// Setup listening socket in the epoll	
-	struct epoll_event ev;
-	ev.events = EPOLLIN|EPOLLONESHOT;
-	ev.data.ptr = serverUser;
-	if(epoll_ctl(com_epollfd, EPOLL_CTL_ADD, com_serverSocket, &ev) == -1){
-		log_logError("Error adding listening socket to epoll", FATAL);
-		return -1;
+	for (int i = 0; i < size; i++){
+		int useSSL, port;
+		if(i > fig_Configuration.numPorts - 1){ // SSL
+			useSSL = 1;
+			port = fig_Configuration.sslPort[i-fig_Configuration.numPorts];
+		} else { // Not secure
+			useSSL = 0;
+			port = fig_Configuration.port[i];
+		}
+
+
+		// Initalize the server socket
+		struct com_SocketInfo serverSockAddr;
+		int socketfd;
+		socketfd = com_startServerSocket(port, &serverSockAddr, 0, useSSL);
+		if(socketfd < 0){
+			log_logMessage("Retrying with IPv4...", INFO);
+			socketfd = com_startServerSocket(port, &serverSockAddr, 1, useSSL);
+			if(socketfd < 0){
+					return -1;
+			}
+		}
+
+		// TODO deal with random users sending data to this user
+		struct usr_UserData *serverUser;
+		serverUser = usr_createUser(&serverSockAddr, fig_Configuration.serverName);
+		if(!serverUser){
+			log_logMessage("Unable to create the SERVER user", ERROR);
+			return -1;
+		}
+
+		// Setup listening socket in the epoll	
+		struct epoll_event ev;
+		ev.events = EPOLLIN|EPOLLONESHOT;
+		ev.data.ptr = serverUser;
+		if(epoll_ctl(com_epollfd, EPOLL_CTL_ADD, socketfd, &ev) == -1){
+			log_logError("Error adding listening socket to epoll", FATAL);
+			return -1;
+		}
+
+		link_add(&serverUsers, serverUser);
 	}
 
     //Setup threads for listening
@@ -57,11 +79,8 @@ int init_server(){
     return 1;
 }
 
+// TODO - proper close
 void com_close(){
-    if(com_serverSocket >= 0){
-        close(com_serverSocket);
-    }
-
     free(threads);
 }
 
@@ -277,8 +296,8 @@ void *com_communicateWithClients(void *param){
 
 		for(int i = 0; i < num; i++){
 			user = events[i].data.ptr;
-			if(user == serverUser){
-				com_acceptClient(&serverSockAddr, *epollfd, com_ctx);
+			if(link_contains(&serverUsers, user) == 1){
+				com_acceptClient(user, *epollfd, com_ctx);
 				continue;
 			}
 
@@ -318,9 +337,10 @@ int com_setupIOThreads(struct fig_ConfigData *config){
     return numThreads;
 }
 
-int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock, SSL_CTX *ctx){
+int com_acceptClient(struct usr_UserData *serverUsr, int epoll_sock, SSL_CTX *ctx){
 	char buff[BUFSIZ];
 
+	struct com_SocketInfo *serverSock = &serverUsr->socketInfo;
 	struct sockaddr_storage cliAddr;
 	socklen_t cliAddrSize = sizeof(cliAddr);
 
@@ -330,7 +350,7 @@ int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock, SSL_CTX 
 
 	// Reset listening socket
 	struct epoll_event ev = {.events = EPOLLIN | EPOLLONESHOT}; 
-	ev.data.ptr = serverUser;
+	ev.data.ptr = serverUsr;
 	if(epoll_ctl(epoll_sock, EPOLL_CTL_MOD, serverSock->socket, &ev) == -1){
 		log_logError("epoll_ctl rearming server", ERROR);
 		return -1;
@@ -342,7 +362,7 @@ int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock, SSL_CTX 
 	}
 
 	// Enable SSL
-	if(fig_Configuration.forceSSL == 1){
+	if(serverSock->useSSL == 1){
 		SSL *ssl;
 		ssl = SSL_new(ctx);
 		SSL_set_fd(ssl, client);
@@ -403,7 +423,7 @@ int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock, SSL_CTX 
 	return 0;
 }
 
-int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* sockAddr, int forceIPv4){
+int com_startServerSocket(int portNum, struct com_SocketInfo* sockAddr, int forceIPv4, int useSSL){
 	int sock;
 	struct addrinfo hints;
 	struct addrinfo *res, *rp;
@@ -419,7 +439,7 @@ int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* so
 
 	//convert int PORT to string
 	char port[6];
-	snprintf(port, ARRAY_SIZE(port), "%d", data->port);
+	snprintf(port, ARRAY_SIZE(port), "%d", portNum);
 
 	int ret = getaddrinfo(NULL, port, &hints, &res);
 	if(ret != 0){
@@ -457,6 +477,7 @@ int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* so
 	if(sockAddr != NULL){
 		memcpy(&sockAddr->addr, &rp->ai_addr, sizeof(rp->ai_addr));
 		sockAddr->addr.ss_family = rp->ai_family;
+		sockAddr->useSSL = useSSL;
 	}
 
 	freeaddrinfo(res);

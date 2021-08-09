@@ -52,8 +52,6 @@ struct com_SocketInfo {
  * Sending and receiving of data that the server will handle
  */
 
-extern int com_serverSocket;
-
 // Setup the server's socket
 int init_server();
 
@@ -83,9 +81,9 @@ void *com_communicateWithClients(void *param);
 int com_setupIOThreads(struct fig_ConfigData *config);
 
 //accept communication with clients
-int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock, SSL_CTX *ctx);
+int com_acceptClient(struct usr_UserData *serverUsr, int epoll_sock, SSL_CTX *ctx);
 
 //start server socket based on configuration
-int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* sockAddr, int forceIPv4);
+int com_startServerSocket(int portNum, struct com_SocketInfo* sockAddr, int forceIPv4, int useSSL);
 
 #endif
