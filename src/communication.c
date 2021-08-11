@@ -10,11 +10,13 @@ SSL_CTX *com_ctx;
 extern struct chat_ServerLists serverLists;
 
 int init_server(){
-	init_ssl(); 
-	com_ctx = ssl_getCtx(fig_Configuration.sslCert, fig_Configuration.sslKey, fig_Configuration.sslPass);
-	if(com_ctx == NULL)
-		return -1;
-	log_logMessage("Started SSL", INFO);	
+	if(fig_Configuration.numSSLPorts > 0) { // Don't start if not needed
+		init_ssl(); 
+		com_ctx = ssl_getCtx(fig_Configuration.sslCert, fig_Configuration.sslKey, fig_Configuration.sslPass);
+		if(com_ctx == NULL)
+			return -1;
+		log_logMessage("Started SSL", INFO);	
+	}
 
 	// Create the epoll
 	com_epollfd = epoll_create1(0);

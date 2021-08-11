@@ -30,9 +30,9 @@ dnf install openssl
 Compilation:
 ```sh
 git clone https://github.com/hooperwf1/Boundless-Server.git
-cd Boundless.Chat-Server
-make
-./server
+cd Boundless-Server
+sudo make install
+boundlessd
 ```
 
 ## Configuration
