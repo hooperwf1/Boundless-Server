@@ -9,7 +9,7 @@ struct usr_UserData *usr_createUserArray(int size){
         return NULL;
 	}
 	char buff[200];
-	snprintf(buff, ARRAY_SIZE(buff), "Maximum user count: %d.", serverLists.max);
+	snprintf(buff, ARRAY_SIZE(buff),"Maximum user count: %d.", fig_Configuration.clients);
 	log_logMessage(buff, INFO);
 
 	// Set id of all users to -1 and init their mutexes
@@ -40,57 +40,21 @@ int usr_getNickname(char *buff, struct usr_UserData *user){
     return 1;
 }
 
-struct usr_UserData *usr_getUserByName(char *name){
+struct usr_UserData *usr_getUserByName(char *name, struct chat_ServerLists *sLists){
     struct usr_UserData *user;
 
 	// Case insensitive
 	lowerString(name);
-    for(int i = 0; i < serverLists.max; i++){
-            user = &serverLists.users[i];
-            pthread_mutex_lock(&user->mutex);
+    for(int i = 0; i < sLists->max; i++){
+		user = &sLists->users[i];
+		pthread_mutex_lock(&user->mutex);
 
-            if(user->id >= 0 && !strncmp(user->nickname, name, fig_Configuration.nickLen)){
-                    pthread_mutex_unlock(&user->mutex);
-                    return user;
-            }
+		if(user->id >= 0 && !strncmp(user->nickname, name, fig_Configuration.nickLen)){
+			pthread_mutex_unlock(&user->mutex);
+			return user;
+		}
 
-            pthread_mutex_unlock(&user->mutex);
-    }
-
-    return NULL;
-}
-
-struct usr_UserData *usr_getUserBySocket(int sock){
-    struct usr_UserData *user;
-
-    for(int i = 0; i < serverLists.max; i++){
-            user = &serverLists.users[i];
-            pthread_mutex_lock(&user->mutex);
-
-            if(user->socketInfo.socket == sock){
-                    pthread_mutex_unlock(&user->mutex);
-                    return user;
-            }
-
-            pthread_mutex_unlock(&user->mutex);
-    }
-
-    return NULL;
-}
-
-struct usr_UserData *usr_getUserById(int id){
-    struct usr_UserData *user;
-
-    for(int i = 0; i < serverLists.max; i++){
-            user = &serverLists.users[i];
-            pthread_mutex_lock(&user->mutex);
-
-            if(user->id == id){
-                    pthread_mutex_unlock(&user->mutex);
-                    return user;
-            }
-
-            pthread_mutex_unlock(&user->mutex);
+		pthread_mutex_unlock(&user->mutex);
     }
 
     return NULL;
@@ -98,21 +62,21 @@ struct usr_UserData *usr_getUserById(int id){
 
 //Create a new user and return it
 // TODO fix double nicks if two clients request same name slightly different times
-struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name){
+struct usr_UserData *usr_createUser(char *name, struct chat_ServerLists *sLists){
     struct usr_UserData *user;
 	int success = -1;
 
 	// Find an empty spot
-    for(int i = 0; i < serverLists.max; i++){
-            user = &serverLists.users[i];
-            pthread_mutex_lock(&user->mutex);
+    for(int i = 0; i < sLists->max; i++){
+		user = &sLists->users[i];
+		pthread_mutex_lock(&user->mutex);
 
-			if(user->id < 0){
-				success = 1;
-				break;
-			}
+		if(user->id < 0){
+			success = 1;
+			break;
+		}
 
-            pthread_mutex_unlock(&user->mutex);
+		pthread_mutex_unlock(&user->mutex);
     }
 
 	if(success == -1) { // Failed to find a spot
@@ -137,10 +101,7 @@ struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name)
 		return NULL;
 	}
 
-	memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
 	usr_changeUserMode(user, '+', 'r');
-	user->lastMsg = time(NULL); // Starting time
-	user->pinged = 0; // Dont ping on registration, but still kick if idle
 
     //eventually get this id from saved user data
     user->id = usr_globalUserID++;
@@ -152,6 +113,7 @@ struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name)
     return user;
 }
 
+// TODO - close connection?
 int usr_deleteUser(struct usr_UserData *user){
 	if(user == NULL)
 		return -1;
@@ -163,15 +125,6 @@ int usr_deleteUser(struct usr_UserData *user){
 		free(user->nickname);
 	if(user->groups != NULL)
 		free(user->groups);
-
-    // Remove socket
-	close(user->socketInfo.socket);
-    user->socketInfo.socket = -2; // Ensure that no data sent to wrong user
-	close(user->socketInfo.socket2);
-    user->socketInfo.socket2 = -2; // Ensure that no data sent to wrong user
-
-    // Remove all pending messages
-	link_clear(&user->sendQ);
 
     // Groups and channels
 	grp_removeUserFromAllGroups(user);
@@ -219,36 +172,6 @@ void usr_removeGroup(struct usr_UserData *user, struct clus_Cluster *c){
 	pthread_mutex_unlock(&user->mutex);
 }
 
-// Searches for and kicks users that surpassed their message timeouts
-int usr_timeOutUsers(int timeOut){
-    struct usr_UserData *user;
-
-    for(int i = 0; i < serverLists.max; i++){
-            user = &serverLists.users[i];
-
-            pthread_mutex_lock(&user->mutex);
-			int id = user->id;
-			int diff = (int) difftime(time(NULL), user->lastMsg);
-			int pinged = user->pinged;
-			pthread_mutex_unlock(&user->mutex);
-
-			if(id != -1 && id != 0){ // Neither invalid nor SERVER
-				if(diff > timeOut){
-					log_logMessage("User timeout.", INFO);
-					usr_generateQuit(user, ":Timed out");
-				} else if(pinged == -1 && diff > timeOut/2){ // Ping user
-					com_sendStr(user, "PING :Timeout imminent.");
-
-					pthread_mutex_lock(&user->mutex);
-					user->pinged = 1;
-					pthread_mutex_unlock(&user->mutex);
-				}
-			}
-    }
-
-    return 1;
-}
-
 void usr_changeUserMode(struct usr_UserData *user, char op, char mode){
 	if(user == NULL || user->id < 0){
 		return;
@@ -294,36 +217,11 @@ int usr_userHasMode(struct usr_UserData *user, char mode){
 	return ret;
 }
 
-int usr_handleFlooding(struct usr_UserData *user){
-	// Check time inbetween messages (too fast = quit)
-	pthread_mutex_lock(&user->mutex);
-	double timeDifference = difftime(time(NULL), user->lastMsg);
-	user->lastMsg = time(NULL);
-
-	// If past the flood interval, rest counters
-	user->timeElapsed += (atomic_int) timeDifference;
-	if(user->timeElapsed > fig_Configuration.floodInterval){
-		user->timeElapsed = 0;
-		user->req = 0;
-	}
-
-	user->req++;
-	pthread_mutex_unlock(&user->mutex);
-
-	if(user->req > fig_Configuration.floodNum){
-		log_logMessage("User sending messages too fast.", INFO);
-		usr_generateQuit(user, ":Sending messages too fast");
-		return 1;
-	}
-
-	return -1;
-}
-
 // Generate a quit for a user
 void usr_generateQuit(struct usr_UserData *user, char *reason){
 	char msg[MAX_MESSAGE_LENGTH];
 	snprintf(msg, ARRAY_SIZE(msg), "QUIT %s\n", reason);
-	chat_insertQueue(user, 0, msg, NULL);
+	chat_processInput(msg, user->con);
 }
 
 int usr_sendContactMessage(struct chat_Message *msg, struct usr_UserData *user){

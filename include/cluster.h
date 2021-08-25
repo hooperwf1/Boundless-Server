@@ -33,7 +33,7 @@ struct clus_Cluster { // Represents either a group or channel
 int clus_getClusterName(struct clus_Cluster *cluster, char *buff, int size);
 
 // Returns the cluster based on its name
-struct clus_Cluster *clus_getCluster(char *name);
+struct clus_Cluster *clus_getCluster(char *name, struct chat_ServerLists *sLists);
 
 // Makes sure a cluster's name is valid (no illegal characters allowed)
 int clus_checkClusterName(char *name);
@@ -44,6 +44,8 @@ struct clus_ClusterUser *clus_addUser(struct clus_Cluster *cluster, struct usr_U
 int clus_removeUser(struct clus_Cluster *c, struct usr_UserData *user);
 
 struct clus_ClusterUser *clus_isInCluster(struct clus_Cluster *cluster, struct usr_UserData *user);
+
+struct usr_UserData *clus_getUserInCluster(struct clus_Cluster *cluster, char *name);
 
 // Returns the privs the user has for a channel
 int clus_getUserClusterPrivs(struct usr_UserData *user, struct clus_Cluster *cluster);

@@ -12,7 +12,8 @@ struct evt_List {
 
 struct evt_Item {
 	struct timespec execTime; // When it is to be executed
-    int (*func)(); // Function to run
+	void *param;
+    int (*func)(void *param); // Function to run
 };
 
 int init_events();
@@ -22,7 +23,7 @@ void events_close();
 // Compares two timespec values and returns true if second is earlier
 int evt_compareTimes(struct timespec *first, struct timespec *second);
 
-int evt_addEvent(struct timespec *execTime, int (*func)());
+int evt_addEvent(struct timespec *execTime, int (*func)(void *param), void *param);
 
 // Runs the next event, if any, from the queue
 int evt_runNextEvent();
@@ -35,9 +36,9 @@ int evt_executeEvents();
 
 /* Start of EVENTS */
 // Will print "test" every 5 seconds
-int evt_test(); 
+int evt_test(void *param); 
 
 // Searches for and kicks users that surpassed their message timeouts
-int evt_userTimeout();
+int evt_userTimeout(void *param);
 
 #endif

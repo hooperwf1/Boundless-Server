@@ -8,233 +8,132 @@
 #include "linkedlist.h"
 #include "commands.h"
 
-struct chat_ServerLists serverLists = {0};
-struct chat_DataQueue dataQueue = {0};
-
-int init_chat(){
-	serverLists.max = fig_Configuration.clients;
-
-    // Allocate threads for processing user input 
-    dataQueue.threads = calloc(fig_Configuration.threadsDATA, sizeof(pthread_t)); 
-    if (dataQueue.threads == NULL){
-        log_logError("Error initalizing dataQueue.threads.", ERROR);
-        return -1;
-    }
-    
-    // Initalize mutex to prevent locking issues
-    int ret = pthread_mutex_init(&dataQueue.queueMutex, NULL);
-    if (ret < 0){
-        log_logError("Error initalizing pthread_mutex.", ERROR);
-        return -1;
-    }
+struct chat_ServerLists *init_chat(){
+	struct chat_ServerLists *sLists = calloc(1, sizeof(struct chat_ServerLists));
+	if(sLists == NULL){
+		log_logError("Error initalizing serverList", ERROR);
+		return NULL;
+	}
+	sLists->max = fig_Configuration.clients;
 
 	// Allocate users array
-	serverLists.users = usr_createUserArray(fig_Configuration.clients);
+	sLists->users = usr_createUserArray(fig_Configuration.clients);
 
-	serverLists.groups = grp_createGroupArray(MAX_GROUPS);
-	grp_createGroup(fig_Configuration.defaultGroup, &serverLists.users[0], serverLists.max);
+	sLists->groups = grp_createGroupArray(MAX_GROUPS);
+	grp_createGroup(fig_Configuration.defaultGroup, NULL, sLists);
 
-    return chat_setupDataThreads(&fig_Configuration); 
+    return sLists; 
 }
 
 void chat_close(){
-    free(dataQueue.threads);
-	free(serverLists.users);
 }
 
-int chat_serverIsFull(){
-	if(serverLists.connected >= serverLists.max)
+int chat_serverIsFull(struct chat_ServerLists *serverLists){
+	if(serverLists->connected >= serverLists->max)
 		return 1;
 
 	return -1;
 }
 
-int chat_setupDataThreads(struct fig_ConfigData *config){
-    char buff[BUFSIZ];
-    int numThreads = config->threadsDATA;
-    int ret = 0;
+void chat_processInput(char *str, struct com_Connection *con){
+	if(con == NULL)
+		return;
 
-    for (int i = 0; i < numThreads; i++){
-        ret = pthread_create(&dataQueue.threads[i], NULL, chat_processQueue, &dataQueue);
-        if (ret < 0){
-            log_logError("Error initalizing thread.", ERROR);
-            return -1;
-        }
-    }
+	struct chat_Message cmd;
+	chat_parseStr(str, &cmd); 
+	cmd.user = con->user;
+	cmd.sLists = con->cList->sLists;
 
-    snprintf(buff, ARRAY_SIZE(buff), "Successfully processing data on %d threads.", numThreads);
-    log_logMessage(buff, INFO);
-
-    return numThreads;
+	cmd_runCommand(&cmd);
 }
 
-int chat_insertQueue(struct usr_UserData *user, int type, char *str, struct chat_Message *msg){
-	struct com_QueueJob *job;
-	job = calloc(1, sizeof(struct com_QueueJob));
-	if(job == NULL){
-		log_logError("Error allocating job", ERROR);
-		if(msg != NULL)
-			free(msg);
-		return -1;
-	}
-
-	job->type = type;
-	job->user = user;
-	job->msg = msg;
-	if(str != NULL)
-		strhcpy(job->str, str, ARRAY_SIZE(job->str));
-
-    pthread_mutex_lock(&dataQueue.queueMutex); 
-    link_add(&dataQueue.queue, job);
-    pthread_mutex_unlock(&dataQueue.queueMutex); 
-
-    return 1;
-}
-
-void *chat_processQueue(void *param){
-    struct chat_DataQueue *dataQ = param;
-    struct timespec delay = {.tv_nsec = 1000000}; // 1ms
-
-    while(1) { 
-        // Make sure to set as null to prevent undefined behavior
-        struct com_QueueJob *job = NULL;
-
-        // grab from first item in linked list expecting link_Node of user
-        pthread_mutex_lock(&dataQ->queueMutex);
-        if(link_isEmpty(&dataQ->queue) < 0){
-            job = link_remove(&dataQ->queue, 0);
-        }
-        pthread_mutex_unlock(&dataQ->queueMutex);
-
-        // Nothing to process
-        if(job == NULL){
-            // Allow other threads time to access mutex
-            nanosleep(&delay, NULL); 
-            continue;
-        }
-
-        if(!job->user){
-            log_logMessage("Job user is NULL", DEBUG);
-            free(job);
-            continue;
-        }
-
-        if(job->user->id >= 0){ // Make sure user is valid
-            switch (job->type) {
-                case 0: // Text to cmd
-                    chat_parseInput(job); 
-                    break;
-
-                case 1: // Run the cmd
-                    cmd_runCommand(job->msg);
-                    free(job->msg);
-                    break;                
-            }
-        }
-
-        free(job);
-    }
-
-    return NULL;
-}
-
-// TODO - Support multiple cmds in one read
 // TODO - Handle null bytes? also handle MAJOR issues with memcpy (size of copied)
-int chat_parseInput(struct com_QueueJob *job){
-    struct usr_UserData *user = job->user;
-    struct chat_Message *cmd = malloc(sizeof(struct chat_Message));
-
-    if(cmd == NULL){
-            log_logError("Error creating cmd struct", DEBUG);
-            return -1;
-    }
+int chat_parseStr(char *str, struct chat_Message *cmd){
     memset(cmd, 0, sizeof(struct chat_Message)); // Set all memory to 0
 
     // Find where the message ends (\r or \n); if not supplied just take the very end of the buffer
-    int length = 0;
+    int length = strlen(str);
     int currentPos = 0, loc = 0; // Helps to keep track of where string should be copied
-    for (int i = 0; i < ARRAY_SIZE(job->str)-1; i++){
-        if(job->str[i] == '\n' || job->str[i] == '\r' || job->str[i] == '\0'){
+    for (int i = 0; i < (int) strlen(str); i++){
+        if(str[i] == '\n' || str[i] == '\r'){
             length = i+1;
-            job->str[i] = ' ';
+            str[i] = ' ';
             break;
         }
 
 		// Remove any non-printable characters
-		if(iscntrl(job->str[i]) == 1){
-			job->str[i] = ' ';
+		if(iscntrl(str[i]) == 1){
+			str[i] = ' ';
 		}
     }
 
-    log_logMessage(job->str, MESSAGE);
-
-    if(job->str[0] == ':'){
-       loc = chat_findNextSpace(0, length, job->str);
+    if(str[0] == ':'){
+       loc = chat_findNextSpace(0, length, str);
        if (loc > -1){
-           memcpy(cmd->prefix, &job->str[1], loc - 1); // Copy everything except for the ':'
+           memcpy(cmd->prefix, &str[1], loc - 1); // Copy everything except for the ':'
            currentPos = loc + 1;
        }
     }
 
-    loc = chat_findNextSpace(currentPos, length, job->str); 
+    loc = chat_findNextSpace(currentPos, length, str); 
     if (loc >= 0){
-        memcpy(cmd->command, &job->str[currentPos], loc - currentPos);
+        memcpy(cmd->command, &str[currentPos], loc - currentPos);
         currentPos = loc + 1;
     }
 
     // Fill in up to 15 params
     while (loc > -1 && cmd->paramCount < 15){
-       loc = chat_findNextSpace(currentPos, length, job->str);
+       loc = chat_findNextSpace(currentPos, length, str);
        if (loc >= 0){
-            if(job->str[currentPos] == ':'){ // Colon means rest of string is together
-                memcpy(cmd->params[cmd->paramCount], &job->str[currentPos], length - currentPos);
+            if(str[currentPos] == ':'){ // Colon means rest of string is together
+                memcpy(cmd->params[cmd->paramCount], &str[currentPos], length - currentPos);
                 cmd->paramCount++;
                 break;
             }
 
-            memcpy(cmd->params[cmd->paramCount], &job->str[currentPos], loc - currentPos);
+            memcpy(cmd->params[cmd->paramCount], &str[currentPos], loc - currentPos);
             currentPos = loc +1;
             cmd->paramCount++;
        }
     }
 
-    cmd->user = user;
-
-    return chat_insertQueue(user, 1, NULL, cmd);
+    return 1;
 }
 
 int chat_sendMessage(struct chat_Message *msg) {
-    if(msg == NULL){
+    if(msg == NULL || msg->user == NULL){
         return -1;
     }
 
     char str[BUFSIZ];
     chat_messageToString(msg, str, ARRAY_SIZE(str));
-    com_sendStr(msg->user, str);
+    com_sendStr(msg->user->con, str);
 
     return 1;
 }
 
 int chat_sendServerMessage(struct chat_Message *cmd){
-    struct usr_UserData *user;
+	if(cmd == NULL || cmd->user == NULL)
+		return -1;
+
+	struct com_ConnectionList *cList = cmd->user->con->cList;
+
     char str[BUFSIZ];
     chat_messageToString(cmd, str, ARRAY_SIZE(str));
 
-    for(int i = 0; i < serverLists.max; i++){
-        user = &serverLists.users[i];
+	pthread_mutex_lock(&cList->mutex);
+    for(struct link_Node *n = cList->cons.head; n != NULL; n = n->next){
+		struct com_Connection *c = n->data;
 
-		pthread_mutex_lock(&user->mutex);
-		int id = user->id;
-		pthread_mutex_unlock(&user->mutex);
-
-		if(user == cmd->user){ // Dont send to sender
+		if(c->type != USER) // Not a user to be sent to
 			continue;
-		}
 
-		if(id != -1){
-			com_sendStr(user, str);
-		}
+		if(usr_userHasMode(cmd->user, 'r') == 1) // Not registered
+			continue;
+
+		com_sendStr(c, str);
     }
+	pthread_mutex_unlock(&cList->mutex);
 
     return 1;
 }

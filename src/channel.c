@@ -59,7 +59,9 @@ struct clus_Cluster *chan_createChannel(char *name, struct clus_Cluster *group, 
 
     // Add to the group
 	if(group == NULL)
-		group = &serverLists.groups[0]; // Default group
+		return NULL;
+		// TODO - default group
+		//group = &serverLists.groups[0]; // Default group
 
     struct clus_Cluster *channel; // Find empty spot
 	for(int i = 0; i < fig_Configuration.maxChannels; i++){

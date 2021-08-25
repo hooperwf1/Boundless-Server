@@ -1,37 +1,42 @@
 #include "communication.h"
 
-struct link_List serverUsers;
 pthread_t *threads;
-int com_epollfd = -1;
 int com_numThreads = -1;
-
-SSL_CTX *com_ctx;
 
 extern struct chat_ServerLists serverLists;
 
-int init_server(){
+struct com_ConnectionList *init_server(){
+	struct com_ConnectionList *cList = calloc(1, sizeof(struct com_ConnectionList));
+	if(cList == NULL){
+        log_logError("Error initalizing connection list.", ERROR);
+        return NULL;
+	}
+
 	if(fig_Configuration.numSSLPorts > 0) { // Don't start if not needed
 		init_ssl(); 
-		com_ctx = ssl_getCtx(fig_Configuration.sslCert, fig_Configuration.sslKey, fig_Configuration.sslPass);
-		if(com_ctx == NULL)
-			return -1;
+		cList->ctx = ssl_getCtx(fig_Configuration.sslCert, fig_Configuration.sslKey, fig_Configuration.sslPass);
+		if(cList->ctx == NULL){
+			free(cList);
+			return NULL;
+		}
 		log_logMessage("Started SSL", INFO);	
 	}
 
 	// Create the epoll
-	com_epollfd = epoll_create1(0);
-	if(com_epollfd == -1){
+	cList->epollfd = epoll_create1(0);
+	if(cList->epollfd == -1){
 		log_logError("Error setting up epoll", FATAL);
-		return -1;
+		free(cList);
+		return NULL;
 	}
 
 	// Init all specified ports
 	int size = fig_Configuration.numPorts + fig_Configuration.numSSLPorts;
 	if(size < 1){
 		log_logMessage("No ports specified", ERROR);
-		return -1;
+		free(cList);
+		return NULL;
 	}
-
 	for (int i = 0; i < size; i++){
 		int useSSL, port;
 		if(i > fig_Configuration.numPorts - 1){ // SSL
@@ -51,34 +56,30 @@ int init_server(){
 			log_logMessage("Retrying with IPv4...", INFO);
 			socketfd = com_startServerSocket(port, &serverSockAddr, 1, useSSL);
 			if(socketfd < 0){
-					return -1;
+				free(cList);	
+				return NULL;
 			}
 		}
 
-		// TODO deal with random users sending data to this user
-		struct usr_UserData *serverUser;
-		serverUser = usr_createUser(&serverSockAddr, fig_Configuration.serverName);
-		if(!serverUser){
-			log_logMessage("Unable to create the SERVER user", ERROR);
-			return -1;
-		}
+		struct com_Connection *servPort = com_createConnection(PORT, &serverSockAddr, cList);
+		if(servPort == NULL)
+			return NULL;
 
 		// Setup listening socket in the epoll	
 		struct epoll_event ev;
 		ev.events = EPOLLIN|EPOLLONESHOT;
-		ev.data.ptr = serverUser;
-		if(epoll_ctl(com_epollfd, EPOLL_CTL_ADD, socketfd, &ev) == -1){
+		ev.data.ptr = servPort;
+		if(epoll_ctl(cList->epollfd, EPOLL_CTL_ADD, socketfd, &ev) == -1){
 			log_logError("Error adding listening socket to epoll", FATAL);
-			return -1;
+			free(cList);
+			return NULL;
 		}
-
-		link_add(&serverUsers, serverUser);
 	}
 
     //Setup threads for listening
-    com_numThreads = com_setupIOThreads(&fig_Configuration);
+    com_numThreads = com_setupIOThreads(&fig_Configuration, &cList->epollfd);
 
-    return 1;
+    return cList;
 }
 
 // TODO - proper close
@@ -87,52 +88,33 @@ void com_close(){
 }
 
 // Make a new job and insert it into the queue for sending
-int com_sendStr(struct usr_UserData *user, char *msg){
-	if(user == NULL || user == &serverLists.users[0])
+int com_sendStr(struct com_Connection *con, char *msg){
+	if(con == NULL || con->cList == NULL)
 		return -1;
+		
+	struct com_ConnectionList *cList = con->cList;
 
-    struct com_QueueJob *job = calloc(1, sizeof(struct com_QueueJob));
-    job->user = user;
+	int len = strlen(msg);
+	char *data = malloc(len+1);
+	strhcpy(data, msg, len + 1);
 
-    snprintf(job->str, ARRAY_SIZE(job->str), "%s\r\n", msg);
-    com_insertQueue(job);
-
-	// Safely get user's socket
-	pthread_mutex_lock(&user->mutex);
-	int sock = user->socketInfo.socket2;
-	pthread_mutex_unlock(&user->mutex);
+	// Insert into a connections's sendQ
+    pthread_mutex_lock(&con->mutex);
+	struct link_Node *ret = link_add(&con->sendQ, data);
+	if(ret == NULL){
+		log_logMessage("Error adding job to queue", WARNING);
+		free(data);
+	}
+    pthread_mutex_unlock(&con->mutex);
 
 	// Setup to allow for a write
 	struct epoll_event ev = {.events = EPOLLOUT|EPOLLONESHOT};
-	ev.data.ptr = user;
-	if(epoll_ctl(com_epollfd, EPOLL_CTL_MOD, sock, &ev) == -1){
+	ev.data.ptr = con;
+	if(epoll_ctl(cList->epollfd, EPOLL_CTL_MOD, con->sockInfo.socket2, &ev) == -1){
 		log_logError("Error rearming write socket", WARNING);
-		usr_generateQuit(user, ":Socket error");
+		com_deleteConnection(con);
 		return -1;
 	}
-
-    return 1;
-}
-
-int com_insertQueue(struct com_QueueJob *job){
-    struct usr_UserData *user = job->user;
-
-	if(job == NULL){
-		log_logMessage("Invalid job.", DEBUG);
-		return -1;
-	}
-
-    if(!user || user->id == -1){ // User is disconnecting; nothing new to be sent
-        log_logMessage("User no longer valid", TRACE);
-        return -1; 
-    }
-
-    pthread_mutex_lock(&user->mutex);
-	struct link_Node *ret = link_add(&user->sendQ, job);
-	if(ret == NULL){
-		log_logMessage("Error adding job to queue", WARNING);
-	}
-    pthread_mutex_unlock(&user->mutex);
 
     return 1;
 }
@@ -160,20 +142,20 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int prot
 }
 
 // Will read data from the socket and properly send it for processing
-int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
-	struct usr_UserData *user = userEvent->data.ptr;
-	if(user == NULL){
-		log_logMessage("No user associated with socket", ERROR);
+int com_readFromSocket(struct epoll_event *conEvent, int epollfd){
+	struct com_Connection *con = conEvent->data.ptr;
+	if(con == NULL){
+		log_logMessage("No connection associated with socket", ERROR);
 		return -1;
 	}
-	int sockfd = user->socketInfo.socket;
+	int sockfd = con->sockInfo.socket;
 		
 	char buff[MAX_MESSAGE_LENGTH+1] = {0};
 	int bytes;
 
 	// Read with or without SSL
-	if(user->socketInfo.useSSL == 1){
-		bytes = SSL_read(user->socketInfo.ssl, buff, ARRAY_SIZE(buff)-1);
+	if(con->sockInfo.useSSL == 1){
+		bytes = SSL_read(con->sockInfo.ssl, buff, ARRAY_SIZE(buff)-1);
 	} else {
 		bytes = read(sockfd, buff, ARRAY_SIZE(buff)-1);
 	}
@@ -181,26 +163,18 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 	switch(bytes){
 		case 0:
 			log_logMessage("Client disconnect.", INFO);
-			usr_generateQuit(user, ":Disconnect");
+			com_deleteConnection(con);
 			break;
 		case 1:
 			log_logError("Error reading from client.", WARNING);
-			usr_generateQuit(user, ":Socket error");
+			com_deleteConnection(con);
 			break;
 
 		default: ; 
-			// Rearm the fd because data has already been read
-			struct epoll_event ev = {.events = EPOLLIN|EPOLLONESHOT, .data.ptr = user};
-			if(epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &ev) == -1){
-				usr_generateQuit(user, ":Socket error");
-				log_logError("Error rearming socket", ERROR);
-				return -1;
-			}
-
-			user->pinged = -1; // Reset ping
+			con->pinged = -1; // Reset ping
 
 			// Make sure that the user isn't flooding the server
-			if(usr_handleFlooding(user) == 1)
+			if(com_handleFlooding(con) == 1)
 				return -1;
 
 			// Split up each line into its own job
@@ -214,7 +188,15 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 				if(loc > -1)
 					buff[loc - 1] = '\0';
 				strhcpy(line, &buff[oldLoc], ARRAY_SIZE(line));
-				chat_insertQueue(user, 0, line, NULL);
+				//chat_processInput(line, con);
+				com_sendStr(con, line);
+			}
+
+			// Rearm the fd after data done processing
+			struct epoll_event ev = {.events = EPOLLIN|EPOLLONESHOT, .data.ptr = con};
+			if(epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &ev) == -1){
+				log_logError("Error rearming socket", ERROR);
+				return -1;
 			}
 	}
 
@@ -222,65 +204,113 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 }
 
 // Writes avaliable queue data to socket
-int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
-	struct usr_UserData *user = userEvent->data.ptr;
-	if(user == NULL){
-		log_logMessage("No user associated with socket", ERROR);
+int com_writeToSocket(struct epoll_event *conEvent, int epollfd){
+	struct com_Connection *con = conEvent->data.ptr;
+	if(con == NULL){
+		log_logMessage("No connection associated with socket", ERROR);
 		return -1;
 	}
 
-	// Remove the first job
-	struct com_QueueJob *job = NULL;
-	pthread_mutex_lock(&user->mutex);
-	if(link_isEmpty(&user->sendQ) == -1){
-		job = link_removeNode(&user->sendQ, user->sendQ.head);
+	// Remove the first msg
+	char *data = NULL;
+	pthread_mutex_lock(&con->mutex);
+	if(link_isEmpty(&con->sendQ) == -1){
+		data = link_removeNode(&con->sendQ, con->sendQ.head);
 	}
-	pthread_mutex_unlock(&user->mutex);
+	pthread_mutex_unlock(&con->mutex);
 
-	if(job == NULL)
+	if(data == NULL)
 		return -1;
 
-	char buff[ARRAY_SIZE(job->str)];
-	strhcpy(buff, job->str, ARRAY_SIZE(buff));
-	free(job);
+	char buff[BUFSIZ];
+	strhcpy(buff, data, ARRAY_SIZE(buff));
+	free(data);
 
-	pthread_mutex_lock(&user->mutex);
-	int socket = user->socketInfo.socket2;
-	if(user->id < 0)
-		socket = -1;
-	pthread_mutex_unlock(&user->mutex);
+	pthread_mutex_lock(&con->mutex);
+	int socket = con->sockInfo.socket2;
+	pthread_mutex_unlock(&con->mutex);
 
 	if(socket < 0)
 		return -1;
 
 	log_logMessage(buff, MESSAGE);
 	int ret;
-	if(user->socketInfo.useSSL == 1){
-		ret = SSL_write(user->socketInfo.ssl, buff, strlen(buff));
+	if(con->sockInfo.useSSL == 1){
+		ret = SSL_write(con->sockInfo.ssl, buff, strlen(buff));
 	} else {
-		ret = write(user->socketInfo.socket2, buff, strlen(buff));
+		ret = write(con->sockInfo.socket2, buff, strlen(buff));
 	}
 	if(ret == -1){
 		log_logError("Error writing to client", ERROR);
-		usr_generateQuit(user, ":Socket error");
 		return -1;
 	}
 	
 	// Setup to allow for another write if avaliable
 	struct epoll_event ev = {.events = EPOLLOUT|EPOLLONESHOT};
-	ev.data.ptr = user;
-	if(epoll_ctl(epollfd, EPOLL_CTL_MOD, user->socketInfo.socket2, &ev) == -1){
+	ev.data.ptr = con;
+	if(epoll_ctl(epollfd, EPOLL_CTL_MOD, con->sockInfo.socket2, &ev) == -1){
 		log_logError("Error rearming write socket", WARNING);
-		usr_generateQuit(user, ":Socket error");
 		return -1;
 	}
 	
 	return 0;
 }
 
+int com_handleFlooding(struct com_Connection *con){
+	// Check time inbetween messages (too fast = quit)
+	pthread_mutex_lock(&con->mutex);
+	double timeDifference = difftime(time(NULL), con->lastMsg);
+	con->lastMsg = time(NULL);
+
+	// If past the flood interval, reset counters
+	con->timeElapsed += (atomic_int) timeDifference;
+	if(con->timeElapsed > fig_Configuration.floodInterval){
+		con->timeElapsed = 0;
+		con->req = 0;
+	}
+
+	con->req++;
+	pthread_mutex_unlock(&con->mutex);
+
+	if(con->req > fig_Configuration.floodNum){
+		log_logMessage("User sending messages too fast.", INFO);
+		return 1;
+	}
+
+	return -1;
+}
+
+// Searches for and kicks users that surpassed their message timeouts
+int com_timeOutConnections(int timeOut, struct com_ConnectionList *cList){
+	for(struct link_Node *n = cList->cons.head; n != NULL; n = n->next){
+		struct com_Connection *con = n->data;
+		if(con == NULL)
+			continue;
+
+		pthread_mutex_lock(&con->mutex);
+		int type = con->type;
+		int diff = (int) difftime(time(NULL), con->lastMsg);
+		int pinged = con->pinged;
+		pthread_mutex_unlock(&con->mutex);
+
+		if(type == USER || type == SERVER){ // Ports can't be timed out
+			if(diff > timeOut){
+				log_logMessage("User timeout.", INFO);
+				com_sendStr(con, "QUIT :Connection timeout.");
+			} else if(pinged == -1 && diff > timeOut/2){ // Ping user
+				com_sendStr(con, "PING :Timeout imminent.");
+
+				con->pinged = 1;
+			}
+		}
+    }
+
+    return 1;
+}
+
 void *com_communicateWithClients(void *param){
     int *epollfd = param;
-	struct usr_UserData *user;
+	struct com_Connection *con;
 
 	// First is options, second is storage
 	struct epoll_event events[10];
@@ -297,9 +327,9 @@ void *com_communicateWithClients(void *param){
 		}
 
 		for(int i = 0; i < num; i++){
-			user = events[i].data.ptr;
-			if(link_contains(&serverUsers, user) == 1){
-				com_acceptClient(user, *epollfd, com_ctx);
+			con = events[i].data.ptr;
+			if(con->type == PORT){
+				com_acceptClient(con, *epollfd);
 				continue;
 			}
 
@@ -314,9 +344,9 @@ void *com_communicateWithClients(void *param){
     return NULL;
 }
 
-int com_setupIOThreads(struct fig_ConfigData *config){
+int com_setupIOThreads(struct fig_ConfigData *config, int *epollfd){
     char buff[BUFSIZ];
-    int numThreads = config->threadsIO;
+    int numThreads = config->threads;
 
 	threads = calloc(numThreads, sizeof(pthread_t));
 	if(threads == NULL){
@@ -326,7 +356,7 @@ int com_setupIOThreads(struct fig_ConfigData *config){
 
     int ret = 0;
     for(int i = 0; i < numThreads; i++){
-        ret = pthread_create(&threads[i], NULL, com_communicateWithClients, &com_epollfd);
+        ret = pthread_create(&threads[i], NULL, com_communicateWithClients, epollfd);
         if(ret != 0){
             snprintf(buff, ARRAY_SIZE(buff), "Error with pthread_create: %d", ret);
             log_logMessage(buff, ERROR);
@@ -339,10 +369,42 @@ int com_setupIOThreads(struct fig_ConfigData *config){
     return numThreads;
 }
 
-int com_acceptClient(struct usr_UserData *serverUsr, int epoll_sock, SSL_CTX *ctx){
+struct com_Connection *com_createConnection(int type, struct com_SocketInfo *sockInfo, struct com_ConnectionList *cList){
+	struct com_Connection *con = calloc(1, sizeof(struct com_Connection));
+	if(con == NULL){
+		log_logError("Error initalizing connection", WARNING);
+		return NULL;
+	}
+
+	con->type = type;
+	con->cList = cList;
+	if(sockInfo != NULL)
+		memcpy(&con->sockInfo, sockInfo, sizeof(struct com_SocketInfo));
+
+	con->lastMsg = time(NULL); // Starting time
+	con->pinged = 0; // Dont ping on registration, but still kick if idle
+
+	pthread_mutex_lock(&cList->mutex);
+	link_add(&cList->cons, con);
+	pthread_mutex_unlock(&cList->mutex);
+
+	return con;
+}
+
+void com_deleteConnection(struct com_Connection *con){
+	pthread_mutex_lock(&con->cList->mutex);
+	link_remove(&con->cList->cons, link_contains(&con->cList->cons, con));
+	pthread_mutex_unlock(&con->cList->mutex);
+
+	close(con->sockInfo.socket);
+	close(con->sockInfo.socket2);
+	free(con);
+}
+
+int com_acceptClient(struct com_Connection *servPort, int epoll_sock){
 	char buff[BUFSIZ];
 
-	struct com_SocketInfo *serverSock = &serverUsr->socketInfo;
+	struct com_SocketInfo *serverSock = &servPort->sockInfo;
 	struct sockaddr_storage cliAddr;
 	socklen_t cliAddrSize = sizeof(cliAddr);
 
@@ -352,7 +414,7 @@ int com_acceptClient(struct usr_UserData *serverUsr, int epoll_sock, SSL_CTX *ct
 
 	// Reset listening socket
 	struct epoll_event ev = {.events = EPOLLIN | EPOLLONESHOT}; 
-	ev.data.ptr = serverUsr;
+	ev.data.ptr = servPort;
 	if(epoll_ctl(epoll_sock, EPOLL_CTL_MOD, serverSock->socket, &ev) == -1){
 		log_logError("epoll_ctl rearming server", ERROR);
 		return -1;
@@ -366,7 +428,7 @@ int com_acceptClient(struct usr_UserData *serverUsr, int epoll_sock, SSL_CTX *ct
 	// Enable SSL
 	if(serverSock->useSSL == 1){
 		SSL *ssl;
-		ssl = SSL_new(ctx);
+		ssl = SSL_new(servPort->cList->ctx);
 		SSL_set_fd(ssl, client);
 		if(SSL_accept(ssl) != 1){
 			close(client);
@@ -392,34 +454,32 @@ int com_acceptClient(struct usr_UserData *serverUsr, int epoll_sock, SSL_CTX *ct
 		return -1;
 	}
 
-	if(chat_serverIsFull() == 1){
+	struct com_Connection *newCon = com_createConnection(USER, &newCli, servPort->cList);
+
+	// Give a user struct to this connection
+	struct usr_UserData *user = usr_createUser(UNREGISTERED_NAME, servPort->cList->sLists);
+	if(user == NULL){
 		snprintf(buff, ARRAY_SIZE(buff), "Server is full, try again later.");
 		send(client, buff, strlen(buff), 0);
 		close(client);
 		close(newCli.socket2);
-		
+		com_deleteConnection(newCon);
 		return -1;
-	} else {
-		struct usr_UserData *user = usr_createUser(&newCli, UNREGISTERED_NAME);
-		if(user == NULL){
-			close(client);
-			close(newCli.socket2);
-			return -1;
-		} 
-		ev.data.ptr = user;
+	}
+	newCon->user = user;
+	ev.data.ptr = newCon;
 
-		// Add to epoll
-		if(epoll_ctl(epoll_sock, EPOLL_CTL_ADD, client, &ev) == -1){
-			log_logError("epoll_ctl accepting client", WARNING);
-			return -1;
-		}
+	// Add to epoll
+	if(epoll_ctl(epoll_sock, EPOLL_CTL_ADD, client, &ev) == -1){
+		log_logError("epoll_ctl accepting client", WARNING);
+		return -1;
+	}
 
-		// Setup to allow for a write
-		ev.events = EPOLLOUT|EPOLLONESHOT;
-		if(epoll_ctl(epoll_sock, EPOLL_CTL_ADD, newCli.socket2, &ev) == -1){
-			log_logError("epoll_ctl writing to client", WARNING);
-			return -1;
-		}
+	// Setup to allow for a write
+	ev.events = EPOLLOUT|EPOLLONESHOT;
+	if(epoll_ctl(epoll_sock, EPOLL_CTL_ADD, newCli.socket2, &ev) == -1){
+		log_logError("epoll_ctl writing to client", WARNING);
+		return -1;
 	}
 
 	return 0;

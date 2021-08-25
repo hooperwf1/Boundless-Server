@@ -120,7 +120,7 @@ int cmd_runCommand(struct chat_Message *cmd){
 }
 
 struct clus_Cluster *cmd_checkClusterPerms(struct chat_Message *msg, char *name, struct usr_UserData *user, int reqPrivs) {
-    struct clus_Cluster *cluster = clus_getCluster(name);
+    struct clus_Cluster *cluster = clus_getCluster(name, msg->sLists);
 	char *params[5] = {name};
 
     if(cluster == NULL){
@@ -156,7 +156,7 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
         return 1;
     }
 
-    struct usr_UserData *otherUser = usr_getUserByName(cmd->params[0]);
+    struct usr_UserData *otherUser = usr_getUserByName(cmd->params[0], cmd->sLists);
     if(otherUser == NULL) { // No other user has this name
 		char oldName[fig_Configuration.nickLen];
 		usr_getNickname(oldName, user);
@@ -202,7 +202,7 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
     params[0] = cmd->params[0];
     size = 2;
     if(cmd->params[0][0] != '#' && cmd->params[0][0] != '&'){
-        otherUser = usr_getUserByName(cmd->params[0]);
+        otherUser = usr_getUserByName(cmd->params[0], cmd->sLists);
         if(otherUser == NULL){
 			params[1] = ":Nick not found!";
             chat_createMessage(reply, user, thisServer, ERR_NOSUCHNICK, params, size);
@@ -252,11 +252,11 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	char nick[fig_Configuration.nickLen];
 	usr_getNickname(nick, user);
 
-	struct clus_Cluster *cluster = clus_getCluster(cmd->params[0]);
+	struct clus_Cluster *cluster = clus_getCluster(cmd->params[0], cmd->sLists);
 	if(cluster == NULL) { //try to create it
 		// Only a group
 		if(findCharacter(cmd->params[0], strlen(cmd->params[0]), '/') == -1 && cmd->params[0][0] == '&'){
-			cluster = grp_createGroup(cmd->params[0], user, 100);
+			cluster = grp_createGroup(cmd->params[0], user, cmd->sLists);
 
 		} else { // Channel
 			// Get name for each part
@@ -312,10 +312,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	chat_createMessage(reply, user, nick, "JOIN", params, 1);
 	clus_sendClusterMessage(reply, cluster);
 
-	// Generate a NAMES command
-	char names[1024];
-	snprintf(names, ARRAY_SIZE(names), "NAMES %s\n", cmd->params[0]);
-	chat_insertQueue(user, 0, names, NULL);
+	// TODO - Generate a NAMES command
 
 	return 2;
 }
@@ -357,7 +354,7 @@ int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
 		params[3] = names;
 
 		// Check to see if channel is the correct one first
-		struct clus_Cluster *cluster = clus_getCluster(items[i]);
+		struct clus_Cluster *cluster = clus_getCluster(items[i], cmd->sLists);
 		if(cluster == NULL){ // Invalid
 			params[0] = items[i];
 			chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
@@ -382,7 +379,7 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
     char *params[ARRAY_SIZE(cmd->params)];
 	params[0] = cmd->params[0];
 
-    struct clus_Cluster *cluster = clus_getCluster(cmd->params[0]);
+    struct clus_Cluster *cluster = clus_getCluster(cmd->params[0], cmd->sLists);
     if(cluster == NULL){
         chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
         return -1;
@@ -420,7 +417,7 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply){
         return -1;
     }
 
-    otherUser = usr_getUserByName(cmd->params[1]);
+    otherUser = usr_getUserByName(cmd->params[1], cmd->sLists);
     if(clus_removeUser(cluster, otherUser) < 0) { // Not in the channel
 		params[1] = ":Not on the selected channel!";
 		chat_createMessage(reply, user, thisServer, ERR_USERNOTINCHANNEL, params, 2);
@@ -494,7 +491,7 @@ int cmd_modeUser(struct chat_Message *cmd, struct chat_Message *reply, char op, 
     params[0] = cmd->params[0];
 	params[1] = cmd->params[1];
 
-	otherUser = usr_getUserByName(cmd->params[0]);
+	otherUser = usr_getUserByName(cmd->params[0], cmd->sLists);
 	if(otherUser == NULL){
 		params[1] = ":Nick not found!";
 		chat_createMessage(reply, user, thisServer, ERR_NOSUCHNICK, params, 2);
@@ -591,7 +588,7 @@ int cmd_kill(struct chat_Message *cmd, struct chat_Message *reply){
     struct usr_UserData *user = cmd->user, *otherUser;
 	char *params[] = {cmd->params[0], cmd->params[1]};
 
-	otherUser = usr_getUserByName(cmd->params[0]);
+	otherUser = usr_getUserByName(cmd->params[0], cmd->sLists);
 	if(otherUser == NULL){
 		params[1] = ":Nick not found!";
 		chat_createMessage(reply, user, thisServer, ERR_NOSUCHNICK, params, 2);

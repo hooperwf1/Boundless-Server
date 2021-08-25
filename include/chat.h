@@ -17,13 +17,11 @@
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 #define MAX_GROUPS 1000
 
-struct clus_Cluster;
+/* This header is the intermediate
+   between user/cluster and the
+   connections */
 
-struct chat_DataQueue {
-    struct link_List queue;
-    pthread_t *threads;
-    pthread_mutex_t queueMutex;
-};
+struct clus_Cluster;
 
 struct chat_ServerLists {
 	int max;
@@ -37,38 +35,30 @@ struct chat_ServerLists {
 // and used to identify the recipient when sending
 struct chat_Message {
     struct usr_UserData *user;
+	struct chat_ServerLists *sLists; // Used to identify server items
     char prefix[50];
     char command[50];
     int paramCount;
     char params[10][400];
 };
 
-// So all functions can access this global list
-extern struct chat_ServerLists serverLists;
-
-int init_chat();
+struct chat_ServerLists *init_chat();
 
 void chat_close();
 
-int chat_serverIsFull();
-
-// Setup threads for data processing
-int chat_setupDataThreads(struct fig_ConfigData *config);
-
-// Give data about a job and insert it into the queue
-int chat_insertQueue(struct usr_UserData *user, int type, char *str, struct chat_Message *msg);
+int chat_serverIsFull(struct chat_ServerLists *serverLists);
 
 // Process the queue's contents and then send data back
 // to the communication queue for sending back to clients
-void *chat_processQueue(void *param);
+void chat_processInput(char *str, struct com_Connection *con);
 
 // Parse the input from a user and act on it
-int chat_parseInput(struct com_QueueJob *job);
+int chat_parseStr(char *str, struct chat_Message *cmd);
 
 // Will send a Message struct to specified node
 int chat_sendMessage(struct chat_Message *msg);
 
-// Sends a message to every connected user
+// Sends a message to every connected and registered user
 int chat_sendServerMessage(struct chat_Message *cmd);
 
 // Fills in a Message struct

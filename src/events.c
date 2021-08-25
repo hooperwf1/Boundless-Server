@@ -27,8 +27,7 @@ int init_events(){
         return -1;
     }
 	
-	evt_userTimeout();
-	//evt_test();
+	//evt_userTimeout();
 
 	return 1;
 }
@@ -47,7 +46,7 @@ int evt_compareTimes(struct timespec *first, struct timespec *second){
 	return first->tv_sec > second->tv_sec;
 }
 
-int evt_addEvent(struct timespec *execTime, int (*func)()){
+int evt_addEvent(struct timespec *execTime, int (*func)(), void *param){
 	if(func == NULL)
 		return -1;
 
@@ -59,6 +58,7 @@ int evt_addEvent(struct timespec *execTime, int (*func)()){
     }
 
 	item->func = func;
+	item->param = param;
 	if(execTime == NULL){
 		clock_gettime(CLOCK_REALTIME, &item->execTime);
 	} else {
@@ -107,7 +107,7 @@ int evt_runNextEvent(){
 	struct timespec currentTime;
 	clock_gettime(CLOCK_REALTIME, &currentTime);
 	if(currentTime.tv_sec >= item->execTime.tv_sec){ // Should be executed
-		int ret = item->func();
+		int ret = item->func(item->param);
 		free(item);
 		return ret;
 	}
@@ -159,23 +159,23 @@ int evt_executeEvents(){
 
 /* Start of EVENTS */
 // Will print "test" every 5 seconds
-int evt_test(){
+int evt_test(void *param){
 	log_logMessage("Test event.", EVENT);
 	
 	struct timespec execTime;
 	clock_gettime(CLOCK_REALTIME, &execTime);
 	execTime.tv_sec += 5;
-	evt_addEvent(&execTime, &evt_test);
+	evt_addEvent(&execTime, &evt_test, param);
 
 	return 1;
 }
 
 // Searches for and kicks users that surpassed their message timeouts
-int evt_userTimeout(){
+int evt_userTimeout(void *param){
 	struct timespec execTime;
 	clock_gettime(CLOCK_REALTIME, &execTime);
 	execTime.tv_sec += 1;
-	evt_addEvent(&execTime, &evt_userTimeout);
+	evt_addEvent(&execTime, &evt_userTimeout, param);
 
-	return usr_timeOutUsers(fig_Configuration.timeOut);
+	return com_timeOutConnections(fig_Configuration.timeOut, param);
 }

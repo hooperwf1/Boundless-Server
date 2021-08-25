@@ -28,15 +28,19 @@ int main(){
 		return -1;
     if(init_logging() == -1) /* logging.h */
 		return -1;
-    if(init_chat() == -1) /* chat.h */
+	struct chat_ServerLists *sLists = init_chat();
+    if(sLists == NULL) /* chat.h */
 		return -1;
-    if(init_server() == -1) /* communication.h */
+	struct com_ConnectionList *cList = init_server();
+    if(cList == NULL) /* communication.h */
 		return -1;
+	cList->sLists = sLists;
     if(init_commands() == -1) /* commands.h */
 		return -1;
     if(init_events() == -1) /* events.h */
 		return -1;
 
+	evt_userTimeout(cList);
 	evt_executeEvents();
 
     return 0;

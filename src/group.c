@@ -44,7 +44,7 @@ int grp_initGroup(struct clus_Cluster *g){
 	return 1;
 }
 
-struct clus_Cluster *grp_getGroup(char *name){
+struct clus_Cluster *grp_getGroup(char *name, struct chat_ServerLists *sLists){
 	char data[2][1000];
 	int ret = chat_divideChanName(name, strlen(name), data);
 	if(ret == -1)
@@ -54,13 +54,13 @@ struct clus_Cluster *grp_getGroup(char *name){
 	lowerString(name);
 
 	if(data[0][0] == '\0')
-		return &serverLists.groups[0];
+		return &sLists->groups[0];
 
 	if(data[0][0] != '&')
 		return NULL;
 
 	for(int i = 0; i < MAX_GROUPS; i++){
-		struct clus_Cluster *g = &serverLists.groups[i];
+		struct clus_Cluster *g = &sLists->groups[i];
 
 		pthread_mutex_lock(&g->mutex);
 		if(!strncmp(g->name, name, fig_Configuration.groupNameLength)){
@@ -97,18 +97,19 @@ struct clus_Cluster *grp_getChannel(struct clus_Cluster *group, char *name){
 }
 
 // Adds a group to the main list, and creates a default channel
-struct clus_Cluster *grp_createGroup(char *name, struct usr_UserData *user, int maxUsers){
+struct clus_Cluster *grp_createGroup(char *name, struct usr_UserData *user, struct chat_ServerLists *sLists){
 	if(name[0] != '&')
 		return NULL;
 
 	if(clus_checkClusterName(name) == -1)
 		return NULL;
 
+	int maxUsers = sLists->max;
 	struct clus_Cluster *group = NULL;
 
 	// Add to main list
 	for(int i = 0; i < MAX_GROUPS; i++){
-		struct clus_Cluster *g = &serverLists.groups[i];
+		struct clus_Cluster *g = &sLists->groups[i];
 
 		pthread_mutex_lock(&g->mutex);
 		if(g->id == -1){
@@ -153,8 +154,8 @@ struct clus_Cluster *grp_createGroup(char *name, struct usr_UserData *user, int 
 }
 
 void grp_removeUserFromAllGroups(struct usr_UserData *user){
-	for(int i = 0; i < MAX_GROUPS; i++){
-		struct clus_Cluster *g = &serverLists.groups[i];
+	for(int i = 0; i < fig_Configuration.maxUserGroups; i++){
+		struct clus_Cluster *g = user->groups[i];
 
 		// No checks needed: if fail just keep going
 		clus_removeUser(g, user);

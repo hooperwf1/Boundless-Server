@@ -7,8 +7,8 @@
 #include "logging.h"
 
 //Used to convert string option to an integer
-const char *options[] = {"port", "log", "enablelogging", "numiothreads", 
-						"numdatathreads", "numclients", "nicklength", 
+const char *options[] = {"port", "log", "enablelogging", "UNUSED", 
+						"numthreads", "numclients", "nicklength", 
 						"servername", "channelnamelength", "groupnamelength", 
 						"timeout", "floodinterval", "maxchannels", "defaultgroup",
 						"maxusergroups", "welcomemessage", "oper", "sslcert",
@@ -24,8 +24,7 @@ struct fig_ConfigData fig_Configuration = {
 	.useFile = 0,
 	.port = {0},
 	.sslPort = {0},
-	.threadsIO = 1,
-	.threadsDATA = 1,
+	.threads = 1,
 	.clients = 20,
 	.nickLen = 10,
 	.chanNameLength = 50,
@@ -172,14 +171,9 @@ void fig_parseLine(char *line, int lineNo){
 
 			break;
 
-		case 3:
-			//num io threads
-			val = &fig_Configuration.threadsIO;
-			goto edit_int;
-
 		case 4:
-			//num data threads
-			val = &fig_Configuration.threadsDATA;
+			//num threads
+			val = &fig_Configuration.threads;
 			goto edit_int;
 
 		case 5:

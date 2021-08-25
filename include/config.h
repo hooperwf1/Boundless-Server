@@ -26,7 +26,7 @@ struct fig_ConfigData {
 	int numPorts, numSSLPorts;
 		
 	int useFile;
-	int threadsIO, threadsDATA;
+	int threads;
 	int clients;
 	int nickLen, chanNameLength, groupNameLength;
 	int timeOut, floodInterval, floodNum;

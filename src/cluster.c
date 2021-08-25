@@ -9,7 +9,7 @@ int clus_getClusterName(struct clus_Cluster *cluster, char *buff, int size){
 	return 1;
 }
 
-struct clus_Cluster *clus_getCluster(char *name){
+struct clus_Cluster *clus_getCluster(char *name, struct chat_ServerLists *sLists){
 	struct clus_Cluster *group;
 
 	// Case-insensitive
@@ -21,9 +21,9 @@ struct clus_Cluster *clus_getCluster(char *name){
 		return NULL;
 
 	if(data[0][0] == '\0'){
-		group = &serverLists.groups[0];
+		group = &sLists->groups[0];
 	} else {
-		group = grp_getGroup(data[0]);
+		group = grp_getGroup(data[0], sLists);
 	}
 
 	if(group == NULL)
@@ -54,6 +54,9 @@ int clus_checkClusterName(char *name){
 
 // Add user to the group or channel
 struct clus_ClusterUser *clus_addUser(struct clus_Cluster *cluster, struct usr_UserData *user, int permLevel){
+	if(user == NULL || cluster == NULL)
+		return NULL;
+
 	struct clus_ClusterUser *grpUser = NULL;
 
 	if(user->groupsJoined >= fig_Configuration.maxUserGroups)
@@ -125,6 +128,23 @@ struct clus_ClusterUser *clus_isInCluster(struct clus_Cluster *cluster, struct u
 	return userData;
 }
 
+struct usr_UserData *clus_getUserInCluster(struct clus_Cluster *cluster, char *name){
+	struct usr_UserData *userData = NULL;
+
+	// Go thru each user and check
+	pthread_mutex_lock(&cluster->mutex);
+	for(int i = 0; i < cluster->max || userData != NULL; i++){
+		pthread_mutex_lock(&cluster->users[i].user->mutex);
+		if(!strncmp(cluster->users[i].user->nickname, name, fig_Configuration.nickLen)){
+			userData = cluster->users[i].user;
+		}
+		pthread_mutex_lock(&cluster->users[i].user->mutex);
+	}
+	pthread_mutex_unlock(&cluster->mutex);
+	
+	return userData;
+}
+
 int clus_getUserClusterPrivs(struct usr_UserData *user, struct clus_Cluster *cluster) {
 	if(cluster == NULL || user->id < 0){
 		return -1;
@@ -180,7 +200,7 @@ char *clus_executeClusterMode(char op, char mode, struct clus_Cluster *cluster, 
 			goto change_clus_perm; // Fallthrough because 'v' and 'o' are only slightly different
 		case 'v':
 		change_clus_perm:
-			user = usr_getUserByName(data);
+			user = clus_getUserInCluster(cluster, data);
 			if(user == NULL){
 				return ERR_NOSUCHNICK;
 			}
