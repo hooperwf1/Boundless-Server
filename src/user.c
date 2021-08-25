@@ -62,7 +62,7 @@ struct usr_UserData *usr_getUserByName(char *name, struct chat_ServerLists *sLis
 
 //Create a new user and return it
 // TODO fix double nicks if two clients request same name slightly different times
-struct usr_UserData *usr_createUser(char *name, struct chat_ServerLists *sLists){
+struct usr_UserData *usr_createUser(char *name, struct chat_ServerLists *sLists, struct com_Connection *con){
     struct usr_UserData *user;
 	int success = -1;
 
@@ -102,6 +102,7 @@ struct usr_UserData *usr_createUser(char *name, struct chat_ServerLists *sLists)
 	}
 
 	usr_changeUserMode(user, '+', 'r');
+	user->con = con;
 
     //eventually get this id from saved user data
     user->id = usr_globalUserID++;

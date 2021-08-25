@@ -188,8 +188,8 @@ int com_readFromSocket(struct epoll_event *conEvent, int epollfd){
 				if(loc > -1)
 					buff[loc - 1] = '\0';
 				strhcpy(line, &buff[oldLoc], ARRAY_SIZE(line));
-				//chat_processInput(line, con);
-				com_sendStr(con, line);
+				log_logMessage(line, MESSAGE);
+				chat_processInput(line, con);
 			}
 
 			// Rearm the fd after data done processing
@@ -296,9 +296,9 @@ int com_timeOutConnections(int timeOut, struct com_ConnectionList *cList){
 		if(type == USER || type == SERVER){ // Ports can't be timed out
 			if(diff > timeOut){
 				log_logMessage("User timeout.", INFO);
-				com_sendStr(con, "QUIT :Connection timeout.");
+				com_sendStr(con, "QUIT :Connection timeout.\n");
 			} else if(pinged == -1 && diff > timeOut/2){ // Ping user
-				com_sendStr(con, "PING :Timeout imminent.");
+				com_sendStr(con, "PING :Timeout imminent.\n");
 
 				con->pinged = 1;
 			}
@@ -457,7 +457,7 @@ int com_acceptClient(struct com_Connection *servPort, int epoll_sock){
 	struct com_Connection *newCon = com_createConnection(USER, &newCli, servPort->cList);
 
 	// Give a user struct to this connection
-	struct usr_UserData *user = usr_createUser(UNREGISTERED_NAME, servPort->cList->sLists);
+	struct usr_UserData *user = usr_createUser(UNREGISTERED_NAME, servPort->cList->sLists, newCon);
 	if(user == NULL){
 		snprintf(buff, ARRAY_SIZE(buff), "Server is full, try again later.");
 		send(client, buff, strlen(buff), 0);

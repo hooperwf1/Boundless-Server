@@ -120,7 +120,7 @@ int cmd_runCommand(struct chat_Message *cmd){
 }
 
 struct clus_Cluster *cmd_checkClusterPerms(struct chat_Message *msg, char *name, struct usr_UserData *user, int reqPrivs) {
-    struct clus_Cluster *cluster = clus_getCluster(name, msg->sLists);
+    struct clus_Cluster *cluster = clus_getCluster(name, user->con->cList->sLists);
 	char *params[5] = {name};
 
     if(cluster == NULL){

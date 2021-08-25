@@ -171,6 +171,9 @@ int chat_messageToString(struct chat_Message *msg, char *str, int sizeStr) {
         strhcat(str, msg->params[i], sizeStr);
     }
 
+	strhcat(str, "\n", sizeStr);
+	str[sizeStr - 2] = '\n';
+
     return 1;
 }
 

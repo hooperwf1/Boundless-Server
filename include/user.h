@@ -38,7 +38,7 @@ int usr_getNickname(char *buff, struct usr_UserData *user);
 struct usr_UserData *usr_getUserByName(char *name, struct chat_ServerLists *sLists);
 
 // Returns a new user, after adding them to the main list
-struct usr_UserData *usr_createUser(char *name, struct chat_ServerLists *sLists);
+struct usr_UserData *usr_createUser(char *name, struct chat_ServerLists *sLists, struct com_Connection *con);
 
 // Remove a user from the server
 int usr_deleteUser(struct usr_UserData *user);
