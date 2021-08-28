@@ -92,6 +92,7 @@ int com_sendStr(struct com_Connection *con, char *msg){
 	if(con == NULL || con->cList == NULL)
 		return -1;
 		
+    pthread_mutex_lock(&con->mutex);
 	struct com_ConnectionList *cList = con->cList;
 
 	int len = strlen(msg);
@@ -99,13 +100,11 @@ int com_sendStr(struct com_Connection *con, char *msg){
 	strhcpy(data, msg, len + 1);
 
 	// Insert into a connections's sendQ
-    pthread_mutex_lock(&con->mutex);
 	struct link_Node *ret = link_add(&con->sendQ, data);
 	if(ret == NULL){
 		log_logMessage("Error adding job to queue", WARNING);
 		free(data);
 	}
-    pthread_mutex_unlock(&con->mutex);
 
 	// Setup to allow for a write
 	struct epoll_event ev = {.events = EPOLLOUT|EPOLLONESHOT};
@@ -115,6 +114,7 @@ int com_sendStr(struct com_Connection *con, char *msg){
 		com_deleteConnection(con);
 		return -1;
 	}
+    pthread_mutex_unlock(&con->mutex);
 
     return 1;
 }
@@ -234,14 +234,27 @@ int com_writeToSocket(struct epoll_event *conEvent, int epollfd){
 		return -1;
 
 	log_logMessage(buff, MESSAGE);
+
+	// Ignore SIGPIPE for this thread temporarily
+	sigset_t set;
+	sigemptyset(&set);
+	sigaddset(&set, SIGPIPE);
+	pthread_sigmask(SIG_SETMASK, &set, NULL);
+
 	int ret;
 	if(con->sockInfo.useSSL == 1){
 		ret = SSL_write(con->sockInfo.ssl, buff, strlen(buff));
 	} else {
 		ret = write(con->sockInfo.socket2, buff, strlen(buff));
 	}
-	if(ret == -1){
+
+	// Reenable SIGPIPE
+	struct timespec time = {0}; // No waiting
+	sigtimedwait(&set, NULL, &time);
+
+	if(ret <= 0){
 		log_logError("Error writing to client", ERROR);
+		com_deleteConnection(con);
 		return -1;
 	}
 	
@@ -384,6 +397,12 @@ struct com_Connection *com_createConnection(int type, struct com_SocketInfo *soc
 	con->lastMsg = time(NULL); // Starting time
 	con->pinged = 0; // Dont ping on registration, but still kick if idle
 
+	if(pthread_mutex_init(&con->mutex, NULL) < 0){
+		log_logError("Error initalizing mutex", ERROR);
+		free(con);
+		return NULL;
+	}
+
 	pthread_mutex_lock(&cList->mutex);
 	link_add(&cList->cons, con);
 	pthread_mutex_unlock(&cList->mutex);
@@ -392,12 +411,21 @@ struct com_Connection *com_createConnection(int type, struct com_SocketInfo *soc
 }
 
 void com_deleteConnection(struct com_Connection *con){
+	pthread_mutex_lock(&con->mutex);
+	// Remove from user if needed
+	if(con->user && con->type == USER){
+		con->user->con = NULL;
+
+	close(con->sockInfo.socket);
+	con->sockInfo.socket = -1;
+	close(con->sockInfo.socket2);
+	con->sockInfo.socket2 = -1;
+	pthread_mutex_unlock(&con->mutex);
+
 	pthread_mutex_lock(&con->cList->mutex);
 	link_remove(&con->cList->cons, link_contains(&con->cList->cons, con));
 	pthread_mutex_unlock(&con->cList->mutex);
 
-	close(con->sockInfo.socket);
-	close(con->sockInfo.socket2);
 	free(con);
 }
 

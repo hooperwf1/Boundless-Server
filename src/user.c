@@ -122,15 +122,28 @@ int usr_deleteUser(struct usr_UserData *user){
     // Nothing new will be sent to queue
     pthread_mutex_lock(&user->mutex);
     user->id = -1; // -1 means invalid user
+
+	// Save the con to close it later
+	struct com_Connection *tempCon = user->con;
+	user->con = NULL;
+
+    // Groups and channels
+	grp_removeUserFromAllGroups(user);
+
+	// Free allocated data
 	if(user->nickname != NULL)
 		free(user->nickname);
 	if(user->groups != NULL)
 		free(user->groups);
 
-    // Groups and channels
-	grp_removeUserFromAllGroups(user);
+	user->nickname = NULL;
+	user->groups = NULL;
 
     pthread_mutex_unlock(&user->mutex);
+
+	// Close the connection
+	if(tempCon != NULL)
+		com_deleteConnection(tempCon);
 
     return 1;
 }

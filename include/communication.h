@@ -17,6 +17,7 @@
 #include <openssl/err.h>
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
+#include <signal.h>
 #include "ssl.h"
 #include "linkedlist.h"
 
