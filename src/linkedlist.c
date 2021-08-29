@@ -63,7 +63,7 @@ void *link_remove(struct link_List *list, int pos){
 }
 
 void *link_removeNode(struct link_List *list, struct link_Node *node){
-    if(!link_isEmpty(list)){
+    if(link_isEmpty(list) == 1){
             log_logMessage("List is empty: can't remove element", DEBUG);
             return NULL;
     }
@@ -160,4 +160,14 @@ struct link_Node *link_getNode(struct link_List *list, int pos){
     }
 
     return res;
+}
+
+int link_empty(struct link_List *list, int freeData){
+	while(link_isEmpty(list) == -1){
+		void *data = link_remove(list, 0);
+		if(freeData == 1)
+			free(data);
+	}
+
+	return 1;
 }

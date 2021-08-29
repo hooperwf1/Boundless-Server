@@ -46,4 +46,7 @@ int link_indexOf(struct link_List *list, struct link_Node *target);
 
 struct link_Node *link_getNode(struct link_List *list, int pos);
 
+// freeData is if the stored data must be freed aswell
+int link_empty(struct link_List *list, int freeData);
+
 #endif

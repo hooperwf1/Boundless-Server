@@ -1,7 +1,6 @@
 #include "communication.h"
 
-pthread_t *threads;
-int com_numThreads = -1;
+struct com_Thread *threads;
 
 extern struct chat_ServerLists serverLists;
 
@@ -10,6 +9,25 @@ struct com_ConnectionList *init_server(){
 	if(cList == NULL){
         log_logError("Error initalizing connection list.", ERROR);
         return NULL;
+	}
+	cList->max = fig_Configuration.clients + 50;
+
+	cList->cons = calloc(cList->max, sizeof(struct com_Connection));
+	if(cList == NULL){
+        log_logError("Error initalizing connection list.", ERROR);
+		free(cList);
+        return NULL;
+	}
+
+	// Init connections
+	for(int i = 0; i < cList->max; i++){
+		if(pthread_mutex_init(&cList->cons[i].mutex, NULL) < 0){
+			log_logError("Error initalizing mutex", ERROR);
+			free(cList);
+			return NULL;
+		}
+		
+		cList->cons[i].type = -1;
 	}
 
 	if(fig_Configuration.numSSLPorts > 0) { // Don't start if not needed
@@ -77,7 +95,7 @@ struct com_ConnectionList *init_server(){
 	}
 
     //Setup threads for listening
-    com_numThreads = com_setupIOThreads(&fig_Configuration, &cList->epollfd);
+    com_setupIOThreads(&fig_Configuration, cList);
 
     return cList;
 }
@@ -148,6 +166,13 @@ int com_readFromSocket(struct epoll_event *conEvent, int epollfd){
 		log_logMessage("No connection associated with socket", ERROR);
 		return -1;
 	}
+
+	pthread_mutex_lock(&con->mutex);
+	if(con->type == -1){ // Done
+		pthread_mutex_unlock(&con->mutex);
+		return -1;
+	}
+		
 	int sockfd = con->sockInfo.socket;
 		
 	char buff[MAX_MESSAGE_LENGTH+1] = {0};
@@ -159,6 +184,8 @@ int com_readFromSocket(struct epoll_event *conEvent, int epollfd){
 	} else {
 		bytes = read(sockfd, buff, ARRAY_SIZE(buff)-1);
 	}
+
+	pthread_mutex_unlock(&con->mutex);
 
 	switch(bytes){
 		case 0:
@@ -213,11 +240,10 @@ int com_writeToSocket(struct epoll_event *conEvent, int epollfd){
 
 	// Remove the first msg
 	char *data = NULL;
-	pthread_mutex_lock(&con->mutex);
 	if(link_isEmpty(&con->sendQ) == -1){
 		data = link_removeNode(&con->sendQ, con->sendQ.head);
 	}
-	pthread_mutex_unlock(&con->mutex);
+	int socket = con->sockInfo.socket2;
 
 	if(data == NULL)
 		return -1;
@@ -225,10 +251,6 @@ int com_writeToSocket(struct epoll_event *conEvent, int epollfd){
 	char buff[BUFSIZ];
 	strhcpy(buff, data, ARRAY_SIZE(buff));
 	free(data);
-
-	pthread_mutex_lock(&con->mutex);
-	int socket = con->sockInfo.socket2;
-	pthread_mutex_unlock(&con->mutex);
 
 	if(socket < 0)
 		return -1;
@@ -270,8 +292,10 @@ int com_writeToSocket(struct epoll_event *conEvent, int epollfd){
 }
 
 int com_handleFlooding(struct com_Connection *con){
+	if(con == NULL || con->type == -1)
+		return 1;
+
 	// Check time inbetween messages (too fast = quit)
-	pthread_mutex_lock(&con->mutex);
 	double timeDifference = difftime(time(NULL), con->lastMsg);
 	con->lastMsg = time(NULL);
 
@@ -283,7 +307,6 @@ int com_handleFlooding(struct com_Connection *con){
 	}
 
 	con->req++;
-	pthread_mutex_unlock(&con->mutex);
 
 	if(con->req > fig_Configuration.floodNum){
 		log_logMessage("User sending messages too fast.", INFO);
@@ -295,8 +318,8 @@ int com_handleFlooding(struct com_Connection *con){
 
 // Searches for and kicks users that surpassed their message timeouts
 int com_timeOutConnections(int timeOut, struct com_ConnectionList *cList){
-	for(struct link_Node *n = cList->cons.head; n != NULL; n = n->next){
-		struct com_Connection *con = n->data;
+	for(int i = 0; i < cList->max; i++){
+		struct com_Connection *con = &cList->cons[i];
 		if(con == NULL)
 			continue;
 
@@ -322,21 +345,33 @@ int com_timeOutConnections(int timeOut, struct com_ConnectionList *cList){
 }
 
 void *com_communicateWithClients(void *param){
-    int *epollfd = param;
+	struct com_ConnectionList *cList = param;
+    int *epollfd = &cList->epollfd;
 	struct com_Connection *con;
 
-	// First is options, second is storage
 	struct epoll_event events[10];
     int num;
+
+	// Find this thread's condition
+	pthread_cond_t *finishAction;
+	for(int i = 0; i < fig_Configuration.threads; i++){
+		if(threads[i].thread == pthread_self()){
+			finishAction = &threads[i].finishAction;
+			break;
+		}
+	}
 	
     while(1){
-        num = epoll_wait(*epollfd, events, ARRAY_SIZE(events), -1); 
+        num = epoll_wait(*epollfd, events, ARRAY_SIZE(events), 50); 
 		if(num == -1){
 			if(num == EINTR)
 				continue; // OK to continue
 
 			log_logError("epoll_wait", ERROR);
 			exit(EXIT_FAILURE);
+		} else if (num == 0) { // timeout try again
+			pthread_cond_broadcast(finishAction);
+			continue;
 		}
 
 		for(int i = 0; i < num; i++){
@@ -346,22 +381,31 @@ void *com_communicateWithClients(void *param){
 				continue;
 			}
 
+			pthread_mutex_lock(&con->mutex);
+			int canUse = con->type;
+			pthread_mutex_unlock(&con->mutex);
+
+			if(canUse == -1) // doesn't exist anymore
+				continue;
+
 			if(events[i].events & EPOLLIN){
 				com_readFromSocket(&events[i], *epollfd);
 			} else if (events[i].events & EPOLLOUT){
 				com_writeToSocket(&events[i], *epollfd);
 			} // Add disconnection/error
+
+			pthread_cond_broadcast(finishAction);
 		}
     }
     
     return NULL;
 }
 
-int com_setupIOThreads(struct fig_ConfigData *config, int *epollfd){
+int com_setupIOThreads(struct fig_ConfigData *config, struct com_ConnectionList *cList){
     char buff[BUFSIZ];
     int numThreads = config->threads;
 
-	threads = calloc(numThreads, sizeof(pthread_t));
+	threads = calloc(numThreads, sizeof(struct com_Thread));
 	if(threads == NULL){
 		log_logError("Error allocating space for IO threads", FATAL);
 		exit(EXIT_FAILURE);
@@ -369,12 +413,24 @@ int com_setupIOThreads(struct fig_ConfigData *config, int *epollfd){
 
     int ret = 0;
     for(int i = 0; i < numThreads; i++){
-        ret = pthread_create(&threads[i], NULL, com_communicateWithClients, epollfd);
+        ret = pthread_create(&threads[i].thread, NULL, com_communicateWithClients, cList);
         if(ret != 0){
             snprintf(buff, ARRAY_SIZE(buff), "Error with pthread_create: %d", ret);
             log_logMessage(buff, ERROR);
             return -1;
         }
+
+		ret = pthread_mutex_init(&threads[i].mutex, NULL);
+		if (ret < 0){
+			log_logError("Error initalizing pthread_mutex.", ERROR);
+			return -1;
+		}
+
+		ret = pthread_cond_init(&threads[i].finishAction, NULL);
+		if (ret < 0){
+			log_logError("Error initalizing pthread_cond.", ERROR);
+			return -1;
+		}
     }
 	snprintf(buff, ARRAY_SIZE(buff), "Successfully listening on %d threads", numThreads);
 	log_logMessage(buff, INFO);
@@ -383,10 +439,19 @@ int com_setupIOThreads(struct fig_ConfigData *config, int *epollfd){
 }
 
 struct com_Connection *com_createConnection(int type, struct com_SocketInfo *sockInfo, struct com_ConnectionList *cList){
-	struct com_Connection *con = calloc(1, sizeof(struct com_Connection));
-	if(con == NULL){
-		log_logError("Error initalizing connection", WARNING);
-		return NULL;
+	struct com_Connection *con;
+	for(int i = 0; i < cList->max; i++){
+		con = &cList->cons[i];
+
+		pthread_mutex_lock(&con->mutex);
+		int avaliable = con->type;
+		pthread_mutex_unlock(&con->mutex);
+
+		if(avaliable == -1) // It is avaliable
+			break;
+			
+		if(i == cList->max - 1) // None found
+			return NULL;
 	}
 
 	con->type = type;
@@ -396,37 +461,31 @@ struct com_Connection *com_createConnection(int type, struct com_SocketInfo *soc
 
 	con->lastMsg = time(NULL); // Starting time
 	con->pinged = 0; // Dont ping on registration, but still kick if idle
-
-	if(pthread_mutex_init(&con->mutex, NULL) < 0){
-		log_logError("Error initalizing mutex", ERROR);
-		free(con);
-		return NULL;
-	}
-
-	pthread_mutex_lock(&cList->mutex);
-	link_add(&cList->cons, con);
-	pthread_mutex_unlock(&cList->mutex);
+	con->req = 0;
+	con-> timeElapsed = 0;
 
 	return con;
 }
 
 void com_deleteConnection(struct com_Connection *con){
+	if(con == NULL)
+		return;
+
 	pthread_mutex_lock(&con->mutex);
 	// Remove from user if needed
-	if(con->user && con->type == USER){
+	if(con->user && con->type == USER)
 		con->user->con = NULL;
+	con->user = NULL;
+	con->type = -1;
 
 	close(con->sockInfo.socket);
 	con->sockInfo.socket = -1;
 	close(con->sockInfo.socket2);
 	con->sockInfo.socket2 = -1;
+
+	// Remove queue items
+	link_empty(&con->sendQ, 1);
 	pthread_mutex_unlock(&con->mutex);
-
-	pthread_mutex_lock(&con->cList->mutex);
-	link_remove(&con->cList->cons, link_contains(&con->cList->cons, con));
-	pthread_mutex_unlock(&con->cList->mutex);
-
-	free(con);
 }
 
 int com_acceptClient(struct com_Connection *servPort, int epoll_sock){
@@ -482,6 +541,27 @@ int com_acceptClient(struct com_Connection *servPort, int epoll_sock){
 		return -1;
 	}
 
+	/* Wait for other threads to finish before creating connection
+	   so that newCon isn't accidentally reused incorrectly */
+
+	// Get mutex
+	pthread_mutex_t *mutex;
+	for (int i = 0; i < fig_Configuration.threads; i++){
+		if(threads[i].thread == pthread_self()){
+			mutex = &threads[i].mutex;
+			break;
+		}
+	}
+
+	// Wait for other threads
+	for (int i = 0; i < fig_Configuration.threads; i++){
+		// Dont wait for self
+		if(threads[i].thread == pthread_self())
+			continue;
+		
+		pthread_cond_wait(&threads[i].finishAction, mutex);
+	}
+
 	struct com_Connection *newCon = com_createConnection(USER, &newCli, servPort->cList);
 
 	// Give a user struct to this connection
@@ -494,8 +574,11 @@ int com_acceptClient(struct com_Connection *servPort, int epoll_sock){
 		com_deleteConnection(newCon);
 		return -1;
 	}
-	newCon->user = user;
 	ev.data.ptr = newCon;
+
+	pthread_mutex_lock(&newCon->mutex);
+	newCon->user = user;
+	pthread_mutex_unlock(&newCon->mutex);
 
 	// Add to epoll
 	if(epoll_ctl(epoll_sock, EPOLL_CTL_ADD, client, &ev) == -1){

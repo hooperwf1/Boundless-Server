@@ -116,24 +116,19 @@ int chat_sendServerMessage(struct chat_Message *cmd){
 	if(cmd == NULL || cmd->user == NULL)
 		return -1;
 
-	struct com_ConnectionList *cList = cmd->user->con->cList;
+	struct chat_ServerLists *sLists = cmd->user->con->cList->sLists;
 
     char str[BUFSIZ];
     chat_messageToString(cmd, str, ARRAY_SIZE(str));
 
-	pthread_mutex_lock(&cList->mutex);
-    for(struct link_Node *n = cList->cons.head; n != NULL; n = n->next){
-		struct com_Connection *c = n->data;
+	for(int i = 0; i < sLists->max; i++){
+		struct usr_UserData *user = &sLists->users[i];
 
-		if(c->type != USER) // Not a user to be sent to
+		if(usr_userHasMode(user, 'r') == 1) // Not registered
 			continue;
 
-		if(usr_userHasMode(cmd->user, 'r') == 1) // Not registered
-			continue;
-
-		com_sendStr(c, str);
+		com_sendStr(user->con, str);
     }
-	pthread_mutex_unlock(&cList->mutex);
 
     return 1;
 }

@@ -20,6 +20,7 @@
 #include <signal.h>
 #include "ssl.h"
 #include "linkedlist.h"
+#include "array.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 #define MAX_MESSAGE_LENGTH 2048
@@ -66,8 +67,15 @@ struct com_Connection {
 	pthread_mutex_t mutex;
 };
 
+// Used to store thread and alert when it is finished
+struct com_Thread {
+	pthread_t thread;
+	pthread_mutex_t mutex;
+	pthread_cond_t finishAction;
+};
+
 struct com_ConnectionList {
-	struct link_List cons;
+	struct com_Connection *cons;
 	struct chat_ServerLists *sLists; // Location of server lists
 	atomic_int max;
 	int epollfd;
@@ -117,7 +125,7 @@ void *com_communicateWithClients(void *param);
 
 // Setup the threads to start listening for incoming communication and send
 // outbound data to clients
-int com_setupIOThreads(struct fig_ConfigData *config, int *epollfd);
+int com_setupIOThreads(struct fig_ConfigData *config, struct com_ConnectionList *cList);
 
 // Allocates a new connection
 struct com_Connection *com_createConnection(int type, struct com_SocketInfo *sockInfo, struct com_ConnectionList *cList);
