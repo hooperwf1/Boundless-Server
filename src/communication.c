@@ -206,7 +206,7 @@ int com_readFromSocket(struct epoll_event *conEvent, int epollfd){
 
 			// Split up each line into its own job
 			int loc = 0;
-			while(loc >= 0){
+			while(loc >= 0 && con->type != -1){
 				int oldLoc = loc;
 				char line[1024];
 

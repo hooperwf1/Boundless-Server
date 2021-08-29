@@ -309,10 +309,13 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
 	// Success
-	chat_createMessage(reply, user, nick, "JOIN", params, 1);
+	chat_createMessage(reply, NULL, nick, "JOIN", params, 1);
 	clus_sendClusterMessage(reply, cluster);
 
 	// TODO - Generate a NAMES command
+	char names[1024];
+	snprintf(names, ARRAY_SIZE(names), "NAMES %s\n", cmd->params[0]);
+	chat_processInput(names, user->con);
 
 	return 2;
 }
