@@ -21,8 +21,8 @@
 
 sqlite3 *init_save(char *saveFile);
 
-// Will load a user from the SQL table
-int save_loadUser(char *name, struct usr_UserData *user);
+// Will load a user from the SQL table, pass is optional verification
+int save_loadUser(char *name, struct usr_UserData *user, char *pass);
 
 void save_logError(char *message, int code, int type);
 

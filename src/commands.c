@@ -38,6 +38,7 @@ int init_commands() {
     cmd_addCommand("QUIT", 0, 0, &cmd_quit);
     cmd_addCommand("KILL", 2, 2, &cmd_kill);
     cmd_addCommand("OPER", 2, 1, &cmd_oper);
+    cmd_addCommand("AUTH", 1, 0, &cmd_auth);
 
     log_logMessage("Successfully initalized commands.", INFO);
     return 1;
@@ -162,34 +163,21 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 		usr_getNickname(oldName, user);
 		int isUnreg = usr_userHasMode(user, 'r');
 
-		// Set the name in the user's buffer
+		// Set the name in the user's buffer, keep ID -1 if not reg
         pthread_mutex_lock(&user->mutex);
         strhcpy(user->nickname, cmd->params[0], fig_Configuration.nickLen);
         pthread_mutex_unlock(&user->mutex);
 
         params[0] = cmd->params[0];
-		// User is already registered
+		// User is already registered - TODO save user data
 		if(isUnreg != 1){
 			chat_createMessage(reply, user, oldName, "NICK", params, 1);
 			usr_sendContactMessage(reply, user);
 			return 1;
 		}
 
-		int ret = save_loadUser(cmd->params[0], user);
-		if(ret == -1){
-			chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, params, 0);
-			return -1;
-		} else if (ret == -2){ // TODO - Create and save user
-			printf("No such user\n");
-			chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, params, 0);
-			return -1;
-		}
-
-		usr_changeUserMode(user, '-', 'r'); // They are now registered
-		params[1] = fig_Configuration.welcomeMessage;
-		chat_createMessage(reply, user, thisServer, RPL_WELCOME, params, 2);
-		return 1;
-
+		// Wait for auth
+		return 2;
     }
 
 	params[0] = cmd->params[0];
@@ -647,5 +635,32 @@ int cmd_oper(struct chat_Message *cmd, struct chat_Message *reply){
 
 	params[0] = ":Welcome operator";
 	chat_createMessage(reply, user, nick, RPL_YOUREOPER, params, 1);
+	return 1;
+}
+
+int cmd_auth(struct chat_Message *cmd, struct chat_Message *reply){
+    struct usr_UserData *user = cmd->user;
+
+	int isReg = usr_userHasMode(user, 'r');
+	if(isReg != 1) { // Already registered
+		chat_createMessage(reply, user, thisServer, ERR_ALREADYREGISTERED, NULL, 0);
+		return -1;
+	}
+
+	char nick[fig_Configuration.nickLen];
+	usr_getNickname(nick, user);
+
+	int ret = save_loadUser(nick, user, cmd->params[0]);
+	if(ret == -1){
+		chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, NULL, 0);
+		return -1;
+	} else if (ret == -2){ // TODO - Create and save user
+		printf("No such user\n");
+		chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, NULL, 0);
+		return -1;
+	}
+	usr_changeUserMode(user, '-', 'r'); // They are now registered
+	char *params[] = {nick, fig_Configuration.welcomeMessage};
+	chat_createMessage(reply, user, thisServer, RPL_WELCOME, params, 2);
 	return 1;
 }

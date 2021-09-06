@@ -34,3 +34,29 @@ unsigned char *auth_hashString(char *str, char *salt, unsigned char ret[SHA256_D
 
 	return ret;
 }
+
+char *auth_hashStringHex(char *str, char *salt, char hex[SHA256_DIGEST_LENGTH_HEX]){
+	unsigned char md[SHA256_DIGEST_LENGTH];
+	if(auth_hashString(str, salt, md) == NULL)
+		return NULL;
+
+	// Convert to hex chars
+	hex[0] = '\0';
+	for(int i = 0; i < SHA256_DIGEST_LENGTH; i++){
+		char tmp[3];
+		snprintf(tmp, 3, "%02x", md[i]);
+		strhcat(hex, tmp, SHA256_DIGEST_LENGTH_HEX);
+	}
+
+	return hex;
+}
+
+int auth_verifyPassword(char *pass, char *hashPass, char *salt){
+	char newHash[SHA256_DIGEST_LENGTH_HEX];
+	auth_hashStringHex(pass, salt, newHash);
+
+	if(!strncmp(newHash, hashPass, ARRAY_SIZE(newHash)))
+		return 1;
+
+	return -1;
+}

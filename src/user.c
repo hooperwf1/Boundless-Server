@@ -64,6 +64,10 @@ struct usr_UserData *usr_getUserByName(char *name, struct chat_ServerLists *sLis
 	if(usr_isValidName(name) == -1)
 		return NULL;
 
+	// Can't be UNREGISTED_NAME
+	if(strncmp(UNREGISTERED_NAME, name, strlen(UNREGISTERED_NAME)) == 0)
+		return NULL;
+
 	// Case insensitive
 	lowerString(name);
     for(int i = 0; i < sLists->max; i++){

@@ -25,7 +25,7 @@ sqlite3 *init_save(char *saveFile){
 		char *cmd = "CREATE TABLE IF NOT EXISTS USERS(" \
 					"ID		integer		PRIMARY KEY	NOT NULL," \
 					"NICK	text		NOT NULL," \
-					"PASS	text		NOT NULL);";
+					"PASS	text);";
 
 		if(sqlite3_exec(db, cmd, NULL, NULL, &errMsg) != SQLITE_OK){
 			log_logMessage(errMsg, ERROR);
@@ -40,7 +40,10 @@ sqlite3 *init_save(char *saveFile){
 	return db;
 }
 
-int save_loadUser(char *name, struct usr_UserData *user){
+int save_loadUser(char *name, struct usr_UserData *user, char *pass){
+	if(user == NULL || name == NULL)
+		return -1;
+
 	char cmd[BUFSIZ];
 	snprintf(cmd, ARRAY_SIZE(cmd), "SELECT * FROM USERS WHERE NICK is \"%s\";", name);
 
@@ -65,6 +68,7 @@ int save_loadUser(char *name, struct usr_UserData *user){
 	int numCols = sqlite3_column_count(statement);
 	int id = -1;
 	char *nick = NULL;
+	char *hashPass = NULL;
 	for (int i = 0; i < numCols; i++){
 		switch(i){
 			case ID_COL:
@@ -73,6 +77,10 @@ int save_loadUser(char *name, struct usr_UserData *user){
 
 			case NICK_COL:
 				nick = (char *) sqlite3_column_text(statement, i);
+				break;
+
+			case PASS_COL:
+				hashPass = (char *) sqlite3_column_text(statement, i);
 				break;
 		}
 	}
@@ -83,9 +91,21 @@ int save_loadUser(char *name, struct usr_UserData *user){
 		return -1;
 	}
 
+	// Both must be null or not null
+	if((!pass || !hashPass) && (pass || hashPass))
+		return -1;
+
+	// Check passwords if not null
+	if(pass){
+		if(auth_verifyPassword(pass, hashPass, fig_Configuration.salt) == -1)
+			return -1;
+	}
+
 	// Fill in user data
+	pthread_mutex_lock(&user->mutex);
 	user->id = id;
     strhcpy(user->nickname, name, fig_Configuration.nickLen);
+	pthread_mutex_unlock(&user->mutex);
 
 	sqlite3_finalize(statement);
 	return 1;

@@ -50,19 +50,6 @@ int main(){
     if(init_events() == -1) /* events.h */
 		return -1;
 
-	unsigned char md[SHA256_DIGEST_LENGTH];
-	auth_hashString("bruh", "salt", md);
-	for(int i = 0; i < SHA256_DIGEST_LENGTH; i++){
-		printf("%02x ", md[i]);
-	}
-	printf("\n");
-
-	auth_hashString("bruh", "salty", md);
-	for(int i = 0; i < SHA256_DIGEST_LENGTH; i++){
-		printf("%02x ", md[i]);
-	}
-	printf("\n");
-
 	evt_userTimeout(cList);
 	evt_executeEvents();
 

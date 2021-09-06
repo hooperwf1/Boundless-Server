@@ -83,4 +83,7 @@ int cmd_kill(struct chat_Message *cmd, struct chat_Message *reply);
 // Used to promote a user to an OPER
 int cmd_oper(struct chat_Message *cmd, struct chat_Message *reply);
 
+// Used to authenticate a connection login
+int cmd_auth(struct chat_Message *cmd, struct chat_Message *reply);
+
 #endif
