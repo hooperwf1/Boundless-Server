@@ -40,8 +40,29 @@ int usr_getNickname(char *buff, struct usr_UserData *user){
     return 1;
 }
 
+int usr_isValidName(char *buff){
+	int len = strlen(buff);
+	if(buff[0] == '&' || buff[0] == '#')
+		return -1;
+
+	for(int i = 0; i < len; i++){
+		switch (buff[i]) {
+			case '*':
+			case ' ':
+			case '\'':
+			case '\n':
+			case '\0':
+				return -1;
+		}
+	}
+
+	return 1;
+}
+
 struct usr_UserData *usr_getUserByName(char *name, struct chat_ServerLists *sLists){
     struct usr_UserData *user;
+	if(usr_isValidName(name) == -1)
+		return NULL;
 
 	// Case insensitive
 	lowerString(name);
@@ -61,10 +82,13 @@ struct usr_UserData *usr_getUserByName(char *name, struct chat_ServerLists *sLis
 }
 
 //Create a new user and return it
-// TODO fix double nicks if two clients request same name slightly different times
 struct usr_UserData *usr_createUser(char *name, struct chat_ServerLists *sLists, struct com_Connection *con){
     struct usr_UserData *user;
 	int success = -1;
+
+	// No invalid characters
+	if(usr_isValidName(name) == -1)
+		return NULL;
 
 	// Find an empty spot
     for(int i = 0; i < sLists->max; i++){
@@ -104,8 +128,7 @@ struct usr_UserData *usr_createUser(char *name, struct chat_ServerLists *sLists,
 	usr_changeUserMode(user, '+', 'r');
 	user->con = con;
 
-    //eventually get this id from saved user data
-    user->id = usr_globalUserID++;
+    user->id = 0; // Not invalid, but still not registered
 
 	// Do this last to ensure user isn't selected before it is ready to be used
     strhcpy(user->nickname, name, fig_Configuration.nickLen);
@@ -131,10 +154,8 @@ int usr_deleteUser(struct usr_UserData *user){
 	grp_removeUserFromAllGroups(user);
 
 	// Free allocated data
-	if(user->nickname != NULL)
-		free(user->nickname);
-	if(user->groups != NULL)
-		free(user->groups);
+	free(user->nickname);
+	free(user->groups);
 
 	user->nickname = NULL;
 	user->groups = NULL;

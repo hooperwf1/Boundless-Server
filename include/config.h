@@ -21,6 +21,8 @@ struct fig_ConfigData {
 	char sslCert[BUFSIZ];
 	char sslKey[BUFSIZ];
 	char sslPass[BUFSIZ];
+	char salt[BUFSIZ];
+	char saveDataFile[BUFSIZ];
 
 	int port[10], sslPort[10];
 	int numPorts, numSSLPorts;

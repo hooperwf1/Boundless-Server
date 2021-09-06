@@ -15,3 +15,22 @@ int auth_checkOper(char *user, char *pass){
 
 	return 1;
 }
+
+unsigned char *auth_hashString(char *str, char *salt, unsigned char ret[SHA256_DIGEST_LENGTH]){
+	SHA256_CTX c;
+
+	if(SHA256_Init(&c) == 0)
+		return NULL;
+
+	// Append salt
+	char buff[BUFSIZ];
+	snprintf(buff, ARRAY_SIZE(buff), "%s%s", salt, str);
+	
+	if(SHA256_Update(&c, buff, strlen(buff)) == 0)
+		return NULL;
+
+	if(SHA256_Final(ret, &c) == 0)
+		return NULL;
+
+	return ret;
+}

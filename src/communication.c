@@ -13,7 +13,7 @@ struct com_ConnectionList *init_server(){
 	cList->max = fig_Configuration.clients + 50;
 
 	cList->cons = calloc(cList->max, sizeof(struct com_Connection));
-	if(cList == NULL){
+	if(cList->cons == NULL){
         log_logError("Error initalizing connection list.", ERROR);
 		free(cList);
         return NULL;

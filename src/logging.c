@@ -128,7 +128,7 @@ void log_printLogError(char* msg, int type){
 void log_printLogFormat(char *msg, int type){
 	char formattedMsg[BUFSIZ];
 
-	log_createLogFormat(formattedMsg, ARRAY_SIZE(formattedMsg), msg, type);
+	log_createLogFormat(formattedMsg, ARRAY_SIZE(formattedMsg)-1, msg, type);
 
 	printf("%s\n", formattedMsg);
 }	

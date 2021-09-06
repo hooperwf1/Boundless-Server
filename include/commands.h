@@ -8,6 +8,9 @@
 #include "user.h"
 #include "channel.h"
 #include "auth.h"
+#include "save.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 #define NUMERIC_SIZE 15
 #define UNUSED(x) x __attribute__((unused))

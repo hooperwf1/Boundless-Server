@@ -175,6 +175,16 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 			return 1;
 		}
 
+		int ret = save_loadUser(cmd->params[0], user);
+		if(ret == -1){
+			chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, params, 0);
+			return -1;
+		} else if (ret == -2){ // TODO - Create and save user
+			printf("No such user\n");
+			chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, params, 0);
+			return -1;
+		}
+
 		usr_changeUserMode(user, '-', 'r'); // They are now registered
 		params[1] = fig_Configuration.welcomeMessage;
 		chat_createMessage(reply, user, thisServer, RPL_WELCOME, params, 2);
@@ -312,7 +322,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	chat_createMessage(reply, NULL, nick, "JOIN", params, 1);
 	clus_sendClusterMessage(reply, cluster);
 
-	// TODO - Generate a NAMES command
+	// Generate a NAMES command
 	char names[1024];
 	snprintf(names, ARRAY_SIZE(names), "NAMES %s\n", cmd->params[0]);
 	chat_processInput(names, user->con);
@@ -514,7 +524,7 @@ int cmd_modeUser(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 	return 1;
 }
 
-// Used by cmd_mode specifically for a channel
+// Used by cmd_mode specifically for a channel or group
 int cmd_modeCluster(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp){
     struct usr_UserData *user = cmd->user;
 	struct clus_Cluster *cluster = NULL;
@@ -579,7 +589,7 @@ int cmd_quit(struct chat_Message *cmd, struct chat_Message *reply){
 	char nick[fig_Configuration.nickLen];
 	usr_getNickname(nick, user);
 
-	chat_createMessage(reply, user, nick, "QUIT", params, 1);
+	chat_createMessage(reply, NULL, nick, "QUIT", params, 1);
 	usr_sendContactMessage(reply, user);
 	usr_deleteUser(user);
 

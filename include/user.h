@@ -4,6 +4,9 @@
 #include "boundless.h"
 #include "chat.h"
 #include "communication.h"
+#include "array.h"
+#include "save.h"
+#include "config.h"
 #include <time.h>
 #include <stdatomic.h>
 
@@ -33,6 +36,9 @@ struct usr_UserData *usr_createUserArray(int size);
 
 // Fills in buffer with selected user's nickname
 int usr_getNickname(char *buff, struct usr_UserData *user);
+
+// Name can't include certain characters
+int usr_isValidName(char *buff);
 
 //Get a user by name
 struct usr_UserData *usr_getUserByName(char *name, struct chat_ServerLists *sLists);

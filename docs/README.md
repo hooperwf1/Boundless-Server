@@ -10,21 +10,21 @@ Simply connect to either Boundless.Chat at port 6667 or another custom instance.
 ## Installation
 
 **Note:** This is currently untested for both MacOS and Windows.  
-Make sure that you have installed OpenSSL.
+Make sure that you have installed OpenSSL and SQLite.
 
 Debian/Ubuntu:
 ```sh
-apt install libssl-dev
+apt install libssl-dev sqlite3 libsqlite3-dev
 ```
 
 Arch Linux (Normally installed by default):
 ```sh
-pacman -S openssl
+pacman -S openssl sqlite
 ```
 
 Fedora:
 ```sh
-dnf install openssl
+dnf install openssl sqlite sqlite-devel sqlite-tcl sqlite-jdbc
 ```
 
 Compilation:

@@ -7,12 +7,12 @@
 #include "logging.h"
 
 //Used to convert string option to an integer
-const char *options[] = {"port", "log", "enablelogging", "UNUSED", 
+const char *options[] = {"port", "log", "enablelogging", "salt", 
 						"numthreads", "numclients", "nicklength", 
 						"servername", "channelnamelength", "groupnamelength", 
 						"timeout", "floodinterval", "maxchannels", "defaultgroup",
 						"maxusergroups", "welcomemessage", "oper", "sslcert",
-						"sslkey", "sslpass", "floodNum", "sslport"};
+						"sslkey", "sslpass", "floodNum", "sslport", "database"};
 
 // Struct to store all config data
 struct fig_ConfigData fig_Configuration = {
@@ -20,6 +20,8 @@ struct fig_ConfigData fig_Configuration = {
 	.serverName = "example.boundless.chat",
 	.defaultGroup = "&General-Chat",
 	.welcomeMessage = ":Welcome to the server!",
+	.saveDataFile = "/var/lib/boundless-server/data.db",
+	.salt = "",
 	.oper = {"oper", "password"},
 	.useFile = 0,
 	.port = {0},
@@ -99,6 +101,11 @@ void fig_parseLine(char *line, int lineNo){
 			strhcpy(fig_Configuration.logDirectory, words[1], ARRAY_SIZE(fig_Configuration.logDirectory));
 			break;
 
+		case 3:
+			//salt
+			strhcpy(fig_Configuration.salt, words[1], ARRAY_SIZE(fig_Configuration.salt));
+			break;
+
 		case 7:
 			//serverName
 			strhcpy(fig_Configuration.serverName, words[1], ARRAY_SIZE(fig_Configuration.serverName));
@@ -122,6 +129,11 @@ void fig_parseLine(char *line, int lineNo){
 		case 19:
 			//sslPass
 			strhcpy(fig_Configuration.sslPass, words[1], ARRAY_SIZE(fig_Configuration.sslPass));
+			break;
+
+		case 22:
+			//sslPass
+			strhcpy(fig_Configuration.saveDataFile, words[1], ARRAY_SIZE(fig_Configuration.saveDataFile));
 			break;
 
 		case 15: ;

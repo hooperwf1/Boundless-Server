@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <sqlite3.h>
 #include "modes.h"
 #include "communication.h"
 #include "logging.h"
@@ -28,6 +29,7 @@ struct chat_ServerLists {
 	int connected;
 	struct usr_UserData *users;
 	struct clus_Cluster *groups;
+	sqlite3 *db;
 };
 
 // Contains all parts of a typical message
