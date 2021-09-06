@@ -17,6 +17,9 @@ int auth_checkOper(char *user, char *pass){
 }
 
 unsigned char *auth_hashString(char *str, char *salt, unsigned char ret[SHA256_DIGEST_LENGTH]){
+	if(str == NULL)
+		return NULL;
+
 	SHA256_CTX c;
 
 	if(SHA256_Init(&c) == 0)
@@ -36,6 +39,9 @@ unsigned char *auth_hashString(char *str, char *salt, unsigned char ret[SHA256_D
 }
 
 char *auth_hashStringHex(char *str, char *salt, char hex[SHA256_DIGEST_LENGTH_HEX]){
+	if(str == NULL)
+		return NULL;
+
 	unsigned char md[SHA256_DIGEST_LENGTH];
 	if(auth_hashString(str, salt, md) == NULL)
 		return NULL;

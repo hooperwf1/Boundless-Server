@@ -654,11 +654,19 @@ int cmd_auth(struct chat_Message *cmd, struct chat_Message *reply){
 	if(ret == -1){
 		chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, NULL, 0);
 		return -1;
-	} else if (ret == -2){ // TODO - Create and save user
-		printf("No such user\n");
-		chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, NULL, 0);
-		return -1;
+	} else if (ret == -2){ // Create the user
+		if(save_createUser(user, cmd->params[0]) == -1){
+			chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, NULL, 0);
+			return -1;
+		}
+
+		// Load it after creation
+		if(save_loadUser(nick, user, cmd->params[0]) != 1){
+			chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, NULL, 0);
+			return -1;
+		}
 	}
+
 	usr_changeUserMode(user, '-', 'r'); // They are now registered
 	char *params[] = {nick, fig_Configuration.welcomeMessage};
 	chat_createMessage(reply, user, thisServer, RPL_WELCOME, params, 2);
