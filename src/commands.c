@@ -163,18 +163,32 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 		usr_getNickname(oldName, user);
 		int isUnreg = usr_userHasMode(user, 'r');
 
-		// Set the name in the user's buffer, keep ID -1 if not reg
-        pthread_mutex_lock(&user->mutex);
-        strhcpy(user->nickname, cmd->params[0], fig_Configuration.nickLen);
-        pthread_mutex_unlock(&user->mutex);
-
         params[0] = cmd->params[0];
-		// User is already registered - TODO save user data
+		// User is already registered
 		if(isUnreg != 1){
+			if(save_updateUserNick(user, cmd->params[0]) == -1){ // Nick already exist
+				params[0] = cmd->params[0];
+				params[1] = ":Nickname already in use";
+
+				chat_createMessage(reply, user, thisServer, ERR_NICKNAMEINUSE, params, 2);
+				return -1;
+			}
+
+			// Reload the user
+			if(save_loadUser(cmd->params[0], user) != 1){
+				chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, NULL, 0);
+				return -1;
+			}
+
 			chat_createMessage(reply, user, oldName, "NICK", params, 1);
 			usr_sendContactMessage(reply, user);
 			return 1;
 		}
+
+		// Set the name in the user's buffer, keep ID -1 if not reg
+        pthread_mutex_lock(&user->mutex);
+        strhcpy(user->nickname, cmd->params[0], fig_Configuration.nickLen);
+        pthread_mutex_unlock(&user->mutex);
 
 		// Wait for auth
 		return 2;
@@ -650,7 +664,14 @@ int cmd_auth(struct chat_Message *cmd, struct chat_Message *reply){
 	char nick[fig_Configuration.nickLen];
 	usr_getNickname(nick, user);
 
-	int ret = save_loadUser(nick, user, cmd->params[0]);
+	// Check that password is correct
+	int ret = save_verifyPassword(nick, cmd->params[0]);
+	if(ret == -1){
+		chat_createMessage(reply, user, thisServer, ERR_PASSWDMISMATCH, NULL, 0);
+		return -1;
+	}
+
+	ret = save_loadUser(nick, user);
 	if(ret == -1){
 		chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, NULL, 0);
 		return -1;
@@ -661,7 +682,7 @@ int cmd_auth(struct chat_Message *cmd, struct chat_Message *reply){
 		}
 
 		// Load it after creation
-		if(save_loadUser(nick, user, cmd->params[0]) != 1){
+		if(save_loadUser(nick, user) != 1){
 			chat_createMessage(reply, user, thisServer, ERR_UNKNOWNERROR, NULL, 0);
 			return -1;
 		}

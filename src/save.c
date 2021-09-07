@@ -40,6 +40,55 @@ sqlite3 *init_save(char *saveFile){
 	return db;
 }
 
+int save_updateUserNick(struct usr_UserData *user, char *nick){
+	if(user == NULL || user->id == -1)
+		return -1;
+
+	char cmd[BUFSIZ];
+	snprintf(cmd, ARRAY_SIZE(cmd), "UPDATE USERS SET NICK = \"%s\" WHERE ID is %d;", nick, user->id);
+
+	char *errMsg;
+	if(sqlite3_exec(database, cmd, NULL, NULL, &errMsg) != SQLITE_OK){
+		log_logMessage(errMsg, ERROR);
+		sqlite3_free(errMsg);
+		return -1;
+	}
+
+
+
+	return 1;
+}
+
+int save_verifyPassword(char *nick, char *pass){
+	char cmd[BUFSIZ];
+	snprintf(cmd, ARRAY_SIZE(cmd), "SELECT PASS FROM USERS WHERE NICK is \"%s\";", nick);
+
+	sqlite3_stmt *statement;
+	int ret = sqlite3_prepare_v2(database, cmd, ARRAY_SIZE(cmd), &statement, NULL);
+	if(ret != SQLITE_OK){
+		save_logError("Error opening database", ret, ERROR);
+		return -1;
+	}
+
+	// Only once to prevent data leaks
+	ret = sqlite3_step(statement);
+	if(ret == SQLITE_DONE) { // No such user
+		sqlite3_finalize(statement);
+		return -2;
+	} else if(ret != SQLITE_ROW) { // Invalid data
+		sqlite3_finalize(statement);
+		return -1;
+	}
+
+	char *hashPass = (char *) sqlite3_column_text(statement, 0);
+
+	if(auth_verifyPassword(pass, hashPass, fig_Configuration.salt) == -1)
+		return -1;
+
+	sqlite3_finalize(statement);
+	return 1;
+}
+
 int save_saveUserPassword(struct usr_UserData *user, char *password){
 	if(user == NULL || password == NULL)
 		return -1;
@@ -88,12 +137,12 @@ int save_createUser(struct usr_UserData *user, char *password){
 	return 1;
 }
 
-int save_loadUser(char *name, struct usr_UserData *user, char *pass){
+int save_loadUser(char *name, struct usr_UserData *user){
 	if(user == NULL || name == NULL)
 		return -1;
 
 	char cmd[BUFSIZ];
-	snprintf(cmd, ARRAY_SIZE(cmd), "SELECT ID, NICK, PASS FROM USERS WHERE NICK is \"%s\";", name);
+	snprintf(cmd, ARRAY_SIZE(cmd), "SELECT ID, NICK FROM USERS WHERE NICK is \"%s\";", name);
 
 	sqlite3_stmt *statement;
 	int ret = sqlite3_prepare_v2(database, cmd, ARRAY_SIZE(cmd), &statement, NULL);
@@ -115,7 +164,6 @@ int save_loadUser(char *name, struct usr_UserData *user, char *pass){
 	int numCols = sqlite3_column_count(statement);
 	int id = -1;
 	char *nick = NULL;
-	char *hashPass = NULL;
 	for (int i = 0; i < numCols; i++){
 		switch(i){
 			case 0: // ID
@@ -125,10 +173,6 @@ int save_loadUser(char *name, struct usr_UserData *user, char *pass){
 			case 1: // NICK
 				nick = (char *) sqlite3_column_text(statement, i);
 				break;
-
-			case 2: // PASS
-				hashPass = (char *) sqlite3_column_text(statement, i);
-				break;
 		}
 	}
 
@@ -136,18 +180,6 @@ int save_loadUser(char *name, struct usr_UserData *user, char *pass){
 	if(strncmp(nick, name, strlen(nick)) != 0){
 		sqlite3_finalize(statement);
 		return -1;
-	}
-
-	// Both must be null or not null
-	if((!pass || !hashPass) && (pass || hashPass)){
-		printf("bruh\n");
-		return -1;
-	}
-
-	// Check passwords if not null
-	if(pass){
-		if(auth_verifyPassword(pass, hashPass, fig_Configuration.salt) == -1)
-			return -1;
 	}
 
 	// Fill in user data

@@ -23,12 +23,16 @@
 
 sqlite3 *init_save(char *saveFile);
 
+int save_updateUserNick(struct usr_UserData *user, char *nick);
+
+int save_verifyPassword(char *nick, char *pass);
+
 int save_saveUserPassword(struct usr_UserData *user, char *password);
 
 int save_createUser(struct usr_UserData *user, char *password);
 
 // Will load a user from the SQL table, pass is optional verification
-int save_loadUser(char *name, struct usr_UserData *user, char *pass);
+int save_loadUser(char *name, struct usr_UserData *user);
 
 void save_logError(char *message, int code, int type);
 
